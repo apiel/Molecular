@@ -18,11 +18,11 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
   onSelect 
 }) => {
   const bubbleStyles = useMemo(() => {
-    const base = "absolute rounded-full flex flex-col items-center justify-center cursor-move select-none overflow-hidden";
+    const base = "absolute rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-hidden";
     const border = isSelected ? "border-[6px] border-white shadow-[0_0_50px_rgba(255,255,255,0.4)]" : "border-2 border-white/10 shadow-xl";
     const bg = node.type === 'OSC' 
-        ? (node.isAudible ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gradient-to-br from-slate-700 to-slate-900') 
-        : 'bg-gradient-to-br from-emerald-500 to-teal-700';
+        ? (node.isAudible ? 'bg-gradient-to-br from-indigo-600 to-purple-700' : 'bg-gradient-to-br from-slate-700 to-slate-900') 
+        : 'bg-gradient-to-br from-emerald-600 to-teal-800';
     return `${base} ${border} ${bg}`;
   }, [isSelected, node.type, node.isAudible]);
 
@@ -36,8 +36,8 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
         height: node.size,
         opacity: isConnecting && !isSelected ? 0.7 : 1,
         transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-        transition: 'transform 0.2s ease, border-color 0.2s ease, shadow 0.2s ease', // Removed transition for left/top for performance
-        willChange: 'left, top, transform'
+        willChange: 'left, top, transform',
+        zIndex: isSelected ? 40 : 20,
       }}
       onMouseDown={(e) => {
         e.stopPropagation();
@@ -57,7 +57,7 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
 
       {node.boundTo && (
         <div className="absolute bottom-2 bg-white/20 text-[7px] px-1 rounded-sm font-black text-white">
-          BOUND
+          LINKED
         </div>
       )}
     </div>

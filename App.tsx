@@ -1,18 +1,26 @@
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { SynthNode, Position, Connection, NodeType } from './types';
 import { Bubble } from './components/Bubble';
 import { Sidebar } from './components/Sidebar';
 import { audioEngine } from './services/audioEngine';
 
-const MIN_FREQ = 0.05; // Almost 0 for LFO
+const MIN_FREQ = 0;
+const MID_FREQ = 20;
 const MAX_FREQ = 2000;
 
 const xToFreq = (x: number, width: number) => {
-  const normX = Math.max(0.001, Math.min(1, x / width));
-  // Logarithmic mapping: lower values are more granular
-  return MIN_FREQ * Math.pow(MAX_FREQ / MIN_FREQ, normX);
+  const oneThird = width / 3;
+  if (x <= oneThird) {
+    // 0 to 20 Hz (Linear for granularity)
+    const t = Math.max(0, x / oneThird);
+    return t * MID_FREQ;
+  } else {
+    // 20 to 2000 Hz (Exponential feeling or linear over rest)
+    const t = Math.max(0, (x - oneThird) / (2 * oneThird));
+    return MID_FREQ + t * (MAX_FREQ - MID_FREQ);
+  }
 };
 
 const App: React.FC = () => {
@@ -24,15 +32,15 @@ const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
   
-  // Using a ref for drag state to minimize closures and overhead
-  const dragStateRef = useRef<{ id: string, startX: number, startY: number, initialPos: Position } | null>(null);
+  const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const startAudio = () => {
     audioEngine.init();
     setIsStarted(true);
     const id = uuidv4();
-    const freq = xToFreq(400, window.innerWidth);
+    const x = 400;
+    const freq = xToFreq(x, window.innerWidth);
     const first: SynthNode = { id, type: 'OSC', subType: 'sine', pos: { x: 400, y: 300 }, size: 120, frequency: freq, modulators: [], color: 'purple', isAudible: true };
     setNodes([first]);
     audioEngine.createOscillator(id, first.subType as any, first.frequency, first.size / 300, true);
@@ -127,7 +135,11 @@ const App: React.FC = () => {
     setNodes(prev => {
       const node = prev.find(n => n.id === id);
       if (node) {
-        dragStateRef.current = { id, startX: e.clientX, startY: e.clientY, initialPos: { ...node.pos } };
+        dragStateRef.current = { 
+          id, 
+          offsetX: e.clientX - node.pos.x, 
+          offsetY: e.clientY - node.pos.y 
+        };
       }
       return prev;
     });
@@ -136,23 +148,26 @@ const App: React.FC = () => {
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!dragStateRef.current) return;
     
-    const { id, startX, startY, initialPos } = dragStateRef.current;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-
+    const { id, offsetX, offsetY } = dragStateRef.current;
+    
     setNodes(prev => {
         const draggedNodeOrig = prev.find(n => n.id === id);
         if (!draggedNodeOrig) return prev;
 
-        const newX = initialPos.x + dx;
-        const newY = initialPos.y + dy;
-        const oldX = draggedNodeOrig.pos.x;
-        const oldY = draggedNodeOrig.pos.y;
-        const shiftX = newX - oldX;
-        const shiftY = newY - oldY;
-
         const w = window.innerWidth;
         const h = window.innerHeight;
+        const halfSize = draggedNodeOrig.size / 2;
+
+        // Follow mouse exactly by using the initial offset
+        let newX = e.clientX - offsetX;
+        let newY = e.clientY - offsetY;
+
+        // Boundary clamping
+        newX = Math.max(halfSize, Math.min(w - 320 - halfSize, newX)); // 320 is sidebar width
+        newY = Math.max(halfSize, Math.min(h - halfSize, newY));
+
+        const shiftX = newX - draggedNodeOrig.pos.x;
+        const shiftY = newY - draggedNodeOrig.pos.y;
 
         return prev.map(n => {
             const isDragged = n.id === id;
@@ -160,24 +175,30 @@ const App: React.FC = () => {
             
             if (!isDragged && !isBound) return n;
 
-            const updatedPos = isDragged 
+            let updatedPos = isDragged 
               ? { x: newX, y: newY }
               : { x: n.pos.x + shiftX, y: n.pos.y + shiftY };
 
-            // Update Audio parameters immediately
+            // Apply boundaries to children too
+            const nHalfSize = n.size / 2;
+            updatedPos.x = Math.max(nHalfSize, Math.min(w - 320 - nHalfSize, updatedPos.x));
+            updatedPos.y = Math.max(nHalfSize, Math.min(h - nHalfSize, updatedPos.y));
+
+            // Update Audio parameters
             if (n.type === 'OSC') {
-                const freq = xToFreq(updatedPos.x, w);
+                const freq = xToFreq(updatedPos.x, w - 320);
                 audioEngine.updateParam(n.id, 'frequency', freq);
                 return { ...n, pos: updatedPos, frequency: freq };
             } else {
+                const effectiveW = w - 320;
                 if (n.subType === 'filter') {
-                    audioEngine.updateParam(n.id, 'cutoff', xToFreq(updatedPos.x, w) * 5);
+                    audioEngine.updateParam(n.id, 'cutoff', xToFreq(updatedPos.x, effectiveW) * 5);
                     audioEngine.updateParam(n.id, 'resonance', (h - updatedPos.y) / 40);
                 } else if (n.subType === 'delay') {
-                    audioEngine.updateParam(n.id, 'time', updatedPos.x / w * 2);
+                    audioEngine.updateParam(n.id, 'time', updatedPos.x / effectiveW * 2);
                     audioEngine.updateParam(n.id, 'feedback', (h - updatedPos.y) / h);
                 } else if (n.subType === 'distortion') {
-                    audioEngine.updateParam(n.id, 'amount', (updatedPos.x / w) * 5);
+                    audioEngine.updateParam(n.id, 'amount', (updatedPos.x / effectiveW) * 5);
                     audioEngine.updateParam(n.id, 'distortionCurve', (h - updatedPos.y) / 5);
                 }
                 return { ...n, pos: updatedPos };
@@ -193,6 +214,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-black text-white" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
       <div ref={containerRef} className="flex-1 relative overflow-hidden bg-[radial-gradient(circle_at_center,_#111_0%,_#000_100%)]">
+        {/* SVG layer for connections */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
             <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -221,12 +243,8 @@ const App: React.FC = () => {
                   className="opacity-40 transition-all hover:opacity-100"
                   fill="none"
                 />
-                {/* Moving Flux Particles */}
                 <circle r="3" fill={isFM ? "#fcd34d" : "#fff"}>
                     <animateMotion dur={isFM ? "0.8s" : "1.5s"} repeatCount="indefinite" path={d} />
-                </circle>
-                <circle r="2" fill={isFM ? "#fcd34d" : "#fff"} opacity="0.5">
-                    <animateMotion dur={isFM ? "0.8s" : "1.5s"} repeatCount="indefinite" path={d} begin="0.4s" />
                 </circle>
               </g>
             );
@@ -241,6 +259,13 @@ const App: React.FC = () => {
             <button onClick={() => addNode('OSC')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-full font-black tracking-widest text-[10px] shadow-lg transition-all active:scale-95 uppercase">Add OSC</button>
             <button onClick={() => addNode('FX')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-full font-black tracking-widest text-[10px] shadow-lg transition-all active:scale-95 uppercase">Add FX</button>
             <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} className={`px-4 py-2 ${isConnecting ? 'bg-white text-black' : 'bg-blue-600'} rounded-full font-black tracking-widest text-[10px] shadow-lg uppercase transition-all`}>{isConnecting ? 'Cancel' : 'Link Signal'}</button>
+        </div>
+
+        {/* Boundary Visualization for Frequency zones */}
+        <div className="absolute inset-y-0 left-0 w-1/3 border-r border-white/5 pointer-events-none z-10">
+          <div className="absolute top-4 left-4 text-[8px] font-black uppercase text-white/20 tracking-widest">
+            Granular Section (0-20Hz)
+          </div>
         </div>
 
         {(isConnecting || isBinding) && (

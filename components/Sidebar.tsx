@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isOsc = selectedNode.type === 'OSC';
 
   const getMappingInfo = () => {
-    const w = window.innerWidth;
+    const w = window.innerWidth - 320;
     const h = window.innerHeight;
     const x = selectedNode.pos.x;
     const y = selectedNode.pos.y;
@@ -60,9 +60,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (isOsc) {
       return { 
         x: 'Frequency', 
-        xVal: `${selectedNode.frequency.toFixed(2)} Hz`, 
+        xVal: `${selectedNode.frequency.toFixed(3)} Hz`, 
         y: 'Unused', 
-        yVal: 'N/A' 
+        yVal: 'N/A',
+        xPercent: (x / w) * 100,
+        yPercent: 0
       };
     }
 
@@ -70,34 +72,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
         case 'filter': 
           return { 
             x: 'Cutoff', 
-            xVal: `${(Math.max(0.1, x / w) * 10000).toFixed(0)} Hz`, 
+            xVal: `${(Math.max(0.1, x / w) * 5000).toFixed(0)} Hz`, 
             y: 'Resonance', 
-            yVal: ((h - y) / 40).toFixed(2) 
+            yVal: ((h - y) / 40).toFixed(2),
+            xPercent: (x / w) * 100,
+            yPercent: ((h - y) / h) * 100
           };
         case 'delay': 
           return { 
             x: 'Time', 
             xVal: `${(x / w * 2).toFixed(2)}s`, 
             y: 'Feedback', 
-            yVal: ((h - y) / h).toFixed(2) 
+            yVal: ((h - y) / h).toFixed(2),
+            xPercent: (x / w) * 100,
+            yPercent: ((h - y) / h) * 100
           };
         case 'distortion': 
           return { 
             x: 'Amount', 
             xVal: ((x / w) * 5).toFixed(2), 
-            y: 'Shape', 
-            yVal: ((h - y) / 5).toFixed(0) 
+            y: 'Shape (Curve)', 
+            yVal: ((h - y) / 5).toFixed(0),
+            xPercent: (x / w) * 100,
+            yPercent: ((h - y) / h) * 100
           };
+        case 'reverb':
+            return {
+                x: 'Position X',
+                xVal: 'Room Ref',
+                y: 'Diffusion',
+                yVal: ((h - y) / h).toFixed(2),
+                xPercent: (x/w) * 100,
+                yPercent: ((h - y) / h) * 100
+            };
         default: 
-          return { x: 'Primary', xVal: '...', y: 'Secondary', yVal: '...' };
+          return { x: 'Primary', xVal: '...', y: 'Secondary', yVal: '...', xPercent: 50, yPercent: 50 };
     }
   };
 
   const map = getMappingInfo();
 
   return (
-    <div className="w-80 glass-panel h-screen p-8 flex flex-col gap-8 border-l border-white/5 animate-in slide-in-from-right duration-500 overflow-y-auto">
-      <header className="border-b border-white/10 pb-6">
+    <div className="w-80 glass-panel h-screen p-8 flex flex-col gap-6 border-l border-white/5 animate-in slide-in-from-right duration-500 overflow-y-auto z-30">
+      <header className="border-b border-white/10 pb-4">
         <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{selectedNode.type}</h2>
         <span className="text-[10px] text-white/30 font-mono block mt-2 tracking-widest">{selectedNode.id.slice(0, 12)}</span>
       </header>
@@ -105,7 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <section className="space-y-6 flex-1">
         {isOsc && (
           <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-            <span className="text-[10px] font-black uppercase tracking-widest">Master Out</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Audible</span>
             <button 
               onClick={() => onUpdate(selectedNode.id, { isAudible: !selectedNode.isAudible })}
               className={`w-14 h-7 rounded-full transition-all relative ${selectedNode.isAudible ? 'bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.5)]' : 'bg-gray-800'}`}
@@ -116,52 +133,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Waveform Profile</label>
+          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Profile</label>
           <select 
-            className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/10 transition-colors text-white"
+            className="w-full bg-black border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
             value={selectedNode.subType}
             onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
           >
             {isOsc ? (
               <>
-                <option value="sine" className="bg-[#1a1a1a]">Pure Sine</option>
-                <option value="square" className="bg-[#1a1a1a]">Hard Square</option>
-                <option value="sawtooth" className="bg-[#1a1a1a]">Aggro Saw</option>
-                <option value="triangle" className="bg-[#1a1a1a]">Soft Triangle</option>
+                <option value="sine">Sine</option>
+                <option value="square">Square</option>
+                <option value="sawtooth">Sawtooth</option>
+                <option value="triangle">Triangle</option>
               </>
             ) : (
               <>
-                <option value="filter" className="bg-[#1a1a1a]">Spectral Filter</option>
-                <option value="delay" className="bg-[#1a1a1a]">Time Warp Delay</option>
-                <option value="distortion" className="bg-[#1a1a1a]">Grit Distortion</option>
-                <option value="reverb" className="bg-[#1a1a1a]">Deep Space Reverb</option>
+                <option value="filter">Filter</option>
+                <option value="delay">Delay</option>
+                <option value="distortion">Distortion</option>
+                <option value="reverb">Reverb</option>
               </>
             )}
           </select>
         </div>
 
+        {/* Enhanced Visual Parameters */}
+        <div className="space-y-4">
+          <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+              <span>X: {map.x}</span>
+              <span className="text-white">{map.xVal}</span>
+            </div>
+            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-500 transition-all duration-75" style={{ width: `${map.xPercent}%` }} />
+            </div>
+          </div>
+
+          {!isOsc && (
+            <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
+              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+                <span>Y: {map.y}</span>
+                <span className="text-white">{map.yVal}</span>
+              </div>
+              <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 transition-all duration-75" style={{ width: `${map.yPercent}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="space-y-3">
-          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Bubble Magnitude</label>
+          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Bubble Size</label>
           <input 
             type="range" min="40" max="400" value={selectedNode.size}
             onChange={(e) => onUpdate(selectedNode.id, { size: parseInt(e.target.value) })}
             className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
           />
-          <div className="text-[9px] font-bold text-white/30 text-right uppercase">Volume/Presence</div>
-        </div>
-
-        {/* Real-time Parameter View */}
-        <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-4">
-            <div className="text-center">
-                <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block mb-1">X-Axis ({map.x})</label>
-                <div className="text-xl font-black text-white tabular-nums tracking-tighter">{map.xVal}</div>
-            </div>
-            {!isOsc && (
-                <div className="text-center border-t border-white/10 pt-4">
-                    <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block mb-1">Y-Axis ({map.y})</label>
-                    <div className="text-xl font-black text-white tabular-nums tracking-tighter">{map.yVal}</div>
-                </div>
-            )}
         </div>
 
         <div className="pt-2 flex flex-col gap-3">
@@ -169,21 +196,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => selectedNode.boundTo ? onUnbind(selectedNode.id) : onBind()}
                 className={`w-full py-4 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase ${selectedNode.boundTo ? 'bg-amber-600/20 text-amber-500 border border-amber-500/50' : 'bg-white/5 hover:bg-white/10 border border-white/10'}`}
             >
-                {selectedNode.boundTo ? 'Release Binding' : 'Bind to Parent'}
+                {selectedNode.boundTo ? 'Release Link' : 'Bind to Parent'}
             </button>
             <button 
                 onClick={() => onDelete(selectedNode.id)}
                 className="w-full py-4 bg-red-600/20 text-red-500 border border-red-500/50 hover:bg-red-600/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
             >
-                Destroy Bubble
+                Delete
             </button>
         </div>
       </section>
 
       <footer className="p-5 bg-white/5 rounded-2xl border border-white/5 text-[9px] text-white/30 uppercase tracking-[0.2em] font-black mt-auto">
-        <p className="mb-2 text-white/50 text-center uppercase tracking-widest">Help</p>
-        <div className="text-[8px] leading-relaxed text-center opacity-80">
-            Drag bubbles horizontally to sweep the first parameter. Drag vertically for the second. Bind bubbles to move them in unison.
+        <div className="text-center opacity-80">
+            Bubble position updates audio in real-time.
         </div>
       </footer>
     </div>
