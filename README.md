@@ -4,7 +4,7 @@ Molecular is a high-performance, spatial multi-voice drone synthesizer. It uses 
 
 Try it out: https://apiel.github.io/Molecular/
 
-<img src='https://github.com/apiel/Molecular/blob/main/demo.png?raw=true' width='500'>
+<img src='https://github.com/apiel/Molecular/blob/main/screenshot.png?raw=true' width='500'>
 
 ## Key Features
 
