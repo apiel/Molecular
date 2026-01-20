@@ -84,6 +84,8 @@ class AudioEngine {
       case 'filter':
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
+        filter.frequency.value = 1000;
+        filter.Q.value = 1;
         input = filter;
         output = filter;
         params = { cutoff: filter.frequency, resonance: filter.Q };
@@ -92,6 +94,9 @@ class AudioEngine {
         const delay = this.ctx.createDelay(5.0);
         const feedback = this.ctx.createGain();
         const wet = this.ctx.createGain();
+        delay.delayTime.value = 0.5;
+        feedback.gain.value = 0.4;
+        wet.gain.value = 0.8;
         delay.connect(feedback);
         feedback.connect(delay);
         delay.connect(wet);
@@ -106,18 +111,24 @@ class AudioEngine {
         input = shaper;
         output = distOutputGain;
         shaper.curve = this.makeDistortionCurve(100);
+        distOutputGain.gain.value = 0.8;
         params = { amount: distOutputGain.gain }; 
         extraNodes = { shaper };
         break;
       case 'reverb':
-      default:
         const reverb = this.ctx.createConvolver();
         const revMix = this.ctx.createGain();
         reverb.buffer = this.createReverbBuffer(2.0);
         reverb.connect(revMix);
+        revMix.gain.value = 0.8;
         input = reverb;
         output = revMix;
         params = { diffusion: revMix.gain }; 
+        break;
+      default:
+        const bypass = this.ctx.createGain();
+        input = bypass;
+        output = bypass;
         break;
     }
 
@@ -130,6 +141,18 @@ class AudioEngine {
       extraNodes,
       outgoingSignalConnections: new Set()
     });
+  }
+
+  public updateEffectType(id: string, type: FxType) {
+    const old = this.nodes.get(id);
+    if (!old) return;
+    
+    // We don't fully remove because we want to preserve the ID entry, 
+    // but we must stop processing on the old node.
+    try { old.output.disconnect(); } catch(e) {}
+    if (old.input) try { old.input.disconnect(); } catch(e) {}
+    
+    this.createEffect(id, type);
   }
 
   private createReverbBuffer(duration: number) {
@@ -159,8 +182,11 @@ class AudioEngine {
   public updateAudible(id: string, isAudible: boolean) {
     const node = this.nodes.get(id);
     if (!node || !this.masterGain) return;
+    
     try { node.output.disconnect(this.masterGain); } catch(e) {}
-    // Only connect to master if it should be audible and doesn't have an outgoing FX chain
+    
+    // An OSC or FX should only connect to master if it has NO outgoing chain connections.
+    // If it has outgoing connections, the audio is flowing into another bubble.
     if (isAudible && node.outgoingSignalConnections.size === 0) {
       node.output.connect(this.masterGain);
     }
@@ -195,9 +221,7 @@ class AudioEngine {
       
       from.output.connect(to.input);
       // Ensure the end of the chain is connected to master
-      if (to.outgoingSignalConnections.size === 0) {
-        try { to.output.connect(this.masterGain!); } catch(e) {}
-      }
+      this.updateAudible(toId, true);
     } else if (to.params.frequency) {
       // Modulation connection (FM)
       const modGain = this.ctx.createGain();
@@ -214,21 +238,12 @@ class AudioEngine {
     if (!from || !to) return;
 
     if (to.input) {
-      // Signal disconnection
       from.outgoingSignalConnections.delete(toId);
       try { from.output.disconnect(to.input); } catch(e) {}
       
-      // If "from" is not going anywhere else, maybe it should go back to master?
-      // For simplicity, we check if it's an OSC that was supposed to be audible
-      if (from.outgoingSignalConnections.size === 0) {
-          // Note: In a real app we'd track if it was previously audible.
-          // For this drone synth, we'll try to reconnect OSCs if they have no output.
-          if (from.main instanceof OscillatorNode) {
-              from.output.connect(this.masterGain!);
-          }
-      }
+      // If "from" is no longer chaining, it might need to go to master
+      this.updateAudible(fromId, true);
     } else {
-      // Modulation disconnection
       const modGain = from.modGains.get(toId);
       if (modGain) {
         try { from.output.disconnect(modGain); modGain.disconnect(); } catch(e) {}
@@ -241,6 +256,7 @@ class AudioEngine {
     const node = this.nodes.get(id);
     if (!node) return;
     try { node.output.disconnect(); } catch(e) {}
+    if (node.input) try { node.input.disconnect(); } catch(e) {}
     if ('stop' in node.main) (node.main as OscillatorNode).stop();
     this.nodes.delete(id);
   }

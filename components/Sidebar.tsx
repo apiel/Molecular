@@ -134,55 +134,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="space-y-2">
           <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Profile</label>
-          <select 
-            className="w-full bg-black border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
-            style={{ colorScheme: 'dark' }}
-            value={selectedNode.subType}
-            onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
-          >
-            {isOsc ? (
-              <>
-                <option value="sine" className="bg-[#111] text-white">Sine</option>
-                <option value="square" className="bg-[#111] text-white">Square</option>
-                <option value="sawtooth" className="bg-[#111] text-white">Sawtooth</option>
-                <option value="triangle" className="bg-[#111] text-white">Triangle</option>
-              </>
-            ) : (
-              <>
-                <option value="filter" className="bg-[#111] text-white">Filter</option>
-                <option value="delay" className="bg-[#111] text-white">Delay</option>
-                <option value="distortion" className="bg-[#111] text-white">Distortion</option>
-                <option value="reverb" className="bg-[#111] text-white">Reverb</option>
-              </>
-            )}
-          </select>
+          <div className="relative">
+            <select 
+                className="w-full bg-[#111] border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
+                style={{ colorScheme: 'dark' }}
+                value={selectedNode.subType}
+                onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
+            >
+                {isOsc ? (
+                <>
+                    <option value="sine" className="bg-[#111] text-white py-2">Sine Wave</option>
+                    <option value="square" className="bg-[#111] text-white py-2">Square Wave</option>
+                    <option value="sawtooth" className="bg-[#111] text-white py-2">Sawtooth Wave</option>
+                    <option value="triangle" className="bg-[#111] text-white py-2">Triangle Wave</option>
+                </>
+                ) : (
+                <>
+                    <option value="filter" className="bg-[#111] text-white py-2">L-Pass Filter</option>
+                    <option value="delay" className="bg-[#111] text-white py-2">Echo Delay</option>
+                    <option value="distortion" className="bg-[#111] text-white py-2">Hard Distortion</option>
+                    <option value="reverb" className="bg-[#111] text-white py-2">Space Reverb</option>
+                </>
+                )}
+            </select>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40 text-[8px] font-black">▼</div>
+          </div>
         </div>
 
         {/* Enhanced Visual Parameters */}
         <div className="space-y-4">
-          <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
+          <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2 shadow-inner">
             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
               <span>X: {map.x}</span>
-              <span className="text-white">{map.xVal}</span>
+              <span className="text-white tabular-nums">{map.xVal}</span>
             </div>
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 transition-all duration-75" style={{ width: `${map.xPercent}%` }} />
+            <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-500 transition-all duration-75 shadow-[0_0_8px_rgba(99,102,241,0.8)]" style={{ width: `${map.xPercent}%` }} />
             </div>
           </div>
 
-          <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
+          <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2 shadow-inner">
             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
               <span>Y: {map.y}</span>
-              <span className="text-white">{map.yVal}</span>
+              <span className="text-white tabular-nums">{map.yVal}</span>
             </div>
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 transition-all duration-75" style={{ width: `${map.yPercent}%` }} />
+            <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 transition-all duration-75 shadow-[0_0_8px_rgba(52,211,153,0.8)]" style={{ width: `${map.yPercent}%` }} />
             </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Bubble Size</label>
+          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Bubble Density</label>
           <input 
             type="range" min="40" max="400" value={selectedNode.size}
             onChange={(e) => onUpdate(selectedNode.id, { size: parseInt(e.target.value) })}
@@ -193,23 +196,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="pt-2 flex flex-col gap-3">
             <button 
                 onClick={() => selectedNode.boundTo ? onUnbind(selectedNode.id) : onBind()}
-                className={`w-full py-4 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase ${selectedNode.boundTo ? 'bg-amber-600/20 text-amber-500 border border-amber-500/50' : 'bg-white/5 hover:bg-white/10 border border-white/10'}`}
+                className={`w-full py-4 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase shadow-lg ${selectedNode.boundTo ? 'bg-amber-600/20 text-amber-500 border border-amber-500/50 hover:bg-amber-600/30' : 'bg-white/5 hover:bg-white/10 border border-white/10'}`}
             >
-                {selectedNode.boundTo ? 'Release Link' : 'Bind to Parent'}
+                {selectedNode.boundTo ? 'Release Binding' : 'Bind to Parent'}
             </button>
             <button 
                 onClick={() => onDelete(selectedNode.id)}
-                className="w-full py-4 bg-red-600/20 text-red-500 border border-red-500/50 hover:bg-red-600/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                className="w-full py-4 bg-red-600/20 text-red-500 border border-red-500/50 hover:bg-red-600/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg"
             >
-                Delete
+                Deconstruct Bubble
             </button>
         </div>
       </section>
 
-      <footer className="p-5 bg-white/5 rounded-2xl border border-white/5 text-[9px] text-white/30 uppercase tracking-[0.2em] font-black mt-auto">
-        <div className="text-center opacity-80">
-            Bubble position updates audio in real-time.
-        </div>
+      <footer className="p-5 bg-white/5 rounded-2xl border border-white/5 text-[9px] text-white/30 uppercase tracking-[0.2em] font-black mt-auto text-center leading-relaxed">
+        Spatial coordinates mapped to spectral flux.
       </footer>
     </div>
   );

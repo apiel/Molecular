@@ -85,20 +85,54 @@ const App: React.FC = () => {
     setNodes(prev => prev.map(n => {
       if (n.id === id) {
         const updated = { ...n, ...updates };
+        
+        // Handle OSC wave type change
+        if (updates.subType !== undefined && updated.type === 'OSC') {
+            audioEngine.updateOscType(id, updates.subType as any);
+        }
+
+        // Handle FX type change (more complex as we need to reconnect chains)
+        if (updates.subType !== undefined && updated.type === 'FX') {
+            audioEngine.updateEffectType(id, updates.subType as any);
+            // Re-apply connections involving this node
+            connections.forEach(conn => {
+                if (conn.fromId === id || conn.toId === id) {
+                    audioEngine.connectNodes(conn.fromId, conn.toId);
+                }
+            });
+            // Re-apply parameters based on current position
+            const w = window.innerWidth - 320;
+            const h = window.innerHeight;
+            if (updated.subType === 'filter') {
+                audioEngine.updateParam(id, 'cutoff', xToFreq(updated.pos.x, w) * 5);
+                audioEngine.updateParam(id, 'resonance', (h - updated.pos.y) / 40);
+            } else if (updated.subType === 'delay') {
+                audioEngine.updateParam(id, 'time', updated.pos.x / w * 2);
+                audioEngine.updateParam(id, 'feedback', (h - updated.pos.y) / h);
+            } else if (updated.subType === 'distortion') {
+                audioEngine.updateParam(id, 'amount', (updated.pos.x / w) * 5);
+                audioEngine.updateParam(id, 'distortionCurve', (h - updated.pos.y) / 5);
+            } else if (updated.subType === 'reverb') {
+                audioEngine.updateParam(id, 'diffusion', (h - updated.pos.y) / h);
+            }
+        }
+
         if (updates.isAudible !== undefined) audioEngine.updateAudible(id, updates.isAudible);
+        
         if (updates.size !== undefined) {
             const val = updated.size / 300;
             audioEngine.updateParam(id, updated.type === 'OSC' ? 'gain' : 'intensity', val);
         }
-        if (updates.frequency !== undefined) audioEngine.updateParam(id, 'frequency', updated.frequency);
-        if (updates.subType !== undefined && updated.type === 'OSC') {
-            audioEngine.updateOscType(id, updates.subType as any);
+        
+        if (updates.frequency !== undefined) {
+            audioEngine.updateParam(id, 'frequency', updated.frequency);
         }
+
         return updated;
       }
       return n;
     }));
-  }, []);
+  }, [connections]);
 
   const deleteNode = useCallback((id: string) => {
     setNodes(prev => prev.filter(n => n.id !== id));
