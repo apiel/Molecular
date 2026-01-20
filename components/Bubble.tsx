@@ -76,9 +76,10 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
             className="ripple" 
             style={{ 
                 animationDuration: `${rippleDuration}s`,
-                width: node.size * 0.2,
-                height: node.size * 0.2,
-                borderColor: `${node.color}66`
+                width: node.size * 0.3,
+                height: node.size * 0.3,
+                borderColor: node.color || '#fff',
+                color: node.color || '#fff'
             }} 
           />
           <div 
@@ -86,9 +87,10 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
             style={{ 
                 animationDuration: `${rippleDuration}s`,
                 animationDelay: `${rippleDuration / 2}s`,
-                width: node.size * 0.2,
-                height: node.size * 0.2,
-                borderColor: `${node.color}44`
+                width: node.size * 0.3,
+                height: node.size * 0.3,
+                borderColor: node.color || '#fff',
+                color: node.color || '#fff'
             }} 
           />
         </>
