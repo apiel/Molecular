@@ -13,11 +13,9 @@ const MAX_FREQ = 2000;
 const xToFreq = (x: number, width: number) => {
   const oneThird = width / 3;
   if (x <= oneThird) {
-    // 0 to 20 Hz (Linear for granularity)
     const t = Math.max(0, x / oneThird);
     return t * MID_FREQ;
   } else {
-    // 20 to 2000 Hz (Exponential feeling or linear over rest)
     const t = Math.max(0, (x - oneThird) / (2 * oneThird));
     return MID_FREQ + t * (MAX_FREQ - MID_FREQ);
   }
@@ -40,7 +38,7 @@ const App: React.FC = () => {
     setIsStarted(true);
     const id = uuidv4();
     const x = 400;
-    const freq = xToFreq(x, window.innerWidth);
+    const freq = xToFreq(x, window.innerWidth - 320);
     const first: SynthNode = { id, type: 'OSC', subType: 'sine', pos: { x: 400, y: 300 }, size: 120, frequency: freq, modulators: [], color: 'purple', isAudible: true };
     setNodes([first]);
     audioEngine.createOscillator(id, first.subType as any, first.frequency, first.size / 300, true);
@@ -50,14 +48,17 @@ const App: React.FC = () => {
   const addNode = (type: NodeType) => {
     if (!isStarted) { startAudio(); return; }
     const id = uuidv4();
-    const x = 100 + Math.random() * 400;
-    const freq = xToFreq(x, window.innerWidth);
+    const w = window.innerWidth - 320;
+    const h = window.innerHeight;
+    const x = 100 + Math.random() * (w - 200);
+    const y = 100 + Math.random() * (h - 200);
+    const freq = xToFreq(x, w);
     const newNode: SynthNode = {
       id,
       type,
       subType: type === 'OSC' ? 'sine' : 'filter',
-      pos: { x, y: 100 + Math.random() * 400 },
-      size: 100,
+      pos: { x, y },
+      size: 110,
       frequency: freq,
       modulators: [],
       color: type === 'OSC' ? 'purple' : 'emerald',
@@ -158,12 +159,11 @@ const App: React.FC = () => {
         const h = window.innerHeight;
         const halfSize = draggedNodeOrig.size / 2;
 
-        // Follow mouse exactly by using the initial offset
         let newX = e.clientX - offsetX;
         let newY = e.clientY - offsetY;
 
         // Boundary clamping
-        newX = Math.max(halfSize, Math.min(w - 320 - halfSize, newX)); // 320 is sidebar width
+        newX = Math.max(halfSize, Math.min(w - 320 - halfSize, newX));
         newY = Math.max(halfSize, Math.min(h - halfSize, newY));
 
         const shiftX = newX - draggedNodeOrig.pos.x;
@@ -179,12 +179,10 @@ const App: React.FC = () => {
               ? { x: newX, y: newY }
               : { x: n.pos.x + shiftX, y: n.pos.y + shiftY };
 
-            // Apply boundaries to children too
             const nHalfSize = n.size / 2;
             updatedPos.x = Math.max(nHalfSize, Math.min(w - 320 - nHalfSize, updatedPos.x));
             updatedPos.y = Math.max(nHalfSize, Math.min(h - nHalfSize, updatedPos.y));
 
-            // Update Audio parameters
             if (n.type === 'OSC') {
                 const freq = xToFreq(updatedPos.x, w - 320);
                 audioEngine.updateParam(n.id, 'frequency', freq);
@@ -212,17 +210,16 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-black text-white" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-      <div ref={containerRef} className="flex-1 relative overflow-hidden bg-[radial-gradient(circle_at_center,_#111_0%,_#000_100%)]">
-        {/* SVG layer for connections */}
+    <div className="flex h-screen w-screen overflow-hidden text-white" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        
+        {/* Signal Lines / Flux connections */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
-            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#818cf8" /><stop offset="100%" stopColor="#34d399" />
+            <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#34d399" stopOpacity="0.4" />
             </linearGradient>
-            <marker id="arrow" viewBox="0 0 10 10" refX="25" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#fff" />
-            </marker>
           </defs>
           {connections.map((conn) => {
             const from = nodes.find(n => n.id === conn.fromId);
@@ -236,15 +233,14 @@ const App: React.FC = () => {
               <g key={conn.id} className="pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedConnectionId(conn.id); setSelectedId(null); }}>
                 <path 
                   d={d}
-                  stroke={isSel ? "#fff" : "url(#lineGrad)"} 
-                  strokeWidth={isSel ? "6" : "2"} 
-                  strokeDasharray={isFM ? "2,2" : "8,4"} 
-                  markerEnd="url(#arrow)"
-                  className="opacity-40 transition-all hover:opacity-100"
+                  stroke={isSel ? "#fff" : "url(#signalGrad)"} 
+                  strokeWidth={isSel ? "5" : "2"} 
+                  strokeDasharray={isFM ? "2,2" : "10,5"} 
+                  className="opacity-60 transition-all hover:opacity-100"
                   fill="none"
                 />
-                <circle r="3" fill={isFM ? "#fcd34d" : "#fff"}>
-                    <animateMotion dur={isFM ? "0.8s" : "1.5s"} repeatCount="indefinite" path={d} />
+                <circle r="3" fill="#fff" filter="blur(1px)">
+                    <animateMotion dur={isFM ? "0.8s" : "2s"} repeatCount="indefinite" path={d} />
                 </circle>
               </g>
             );
@@ -255,28 +251,33 @@ const App: React.FC = () => {
           <Bubble key={node.id} node={node} isSelected={selectedId === node.id} isConnecting={isConnecting || isBinding} onMouseDown={handleMouseDown} onSelect={setSelectedId} />
         ))}
 
-        <div className="absolute top-8 left-8 flex gap-3 z-20">
-            <button onClick={() => addNode('OSC')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-full font-black tracking-widest text-[10px] shadow-lg transition-all active:scale-95 uppercase">Add OSC</button>
-            <button onClick={() => addNode('FX')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-full font-black tracking-widest text-[10px] shadow-lg transition-all active:scale-95 uppercase">Add FX</button>
-            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} className={`px-4 py-2 ${isConnecting ? 'bg-white text-black' : 'bg-blue-600'} rounded-full font-black tracking-widest text-[10px] shadow-lg uppercase transition-all`}>{isConnecting ? 'Cancel' : 'Link Signal'}</button>
+        <div className="absolute top-8 left-8 flex gap-4 z-20">
+            <button onClick={() => addNode('OSC')} className="px-6 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/40 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border border-white/10 backdrop-blur-md">Oscillator</button>
+            <button onClick={() => addNode('FX')} className="px-6 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/40 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border border-white/10 backdrop-blur-md">Effect</button>
+            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} className={`px-6 py-2.5 ${isConnecting ? 'bg-white text-black' : 'bg-blue-600/20'} rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border border-white/10 backdrop-blur-md`}>{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
         </div>
 
-        {/* Boundary Visualization for Frequency zones */}
-        <div className="absolute inset-y-0 left-0 w-1/3 border-r border-white/5 pointer-events-none z-10">
-          <div className="absolute top-4 left-4 text-[8px] font-black uppercase text-white/20 tracking-widest">
-            Granular Section (0-20Hz)
+        {/* frequency zones markers */}
+        <div className="absolute inset-y-0 left-0 w-1/3 border-r border-white/5 pointer-events-none z-10 flex flex-col justify-end p-8">
+          <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr]">
+            Granular Depth (0-20Hz)
           </div>
         </div>
 
         {(isConnecting || isBinding) && (
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl px-8 py-3 rounded-full border border-white/20 text-[10px] font-black uppercase tracking-widest animate-pulse z-50">
-                {isConnecting ? 'Select destination bubble...' : 'Select parent bubble to bind to...'}
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-2xl px-12 py-4 rounded-full border border-white/20 text-[11px] font-black uppercase tracking-[0.3em] animate-pulse z-50">
+                {isConnecting ? 'Link Signal Destination' : 'Bind Mass Parent'}
             </div>
         )}
 
         {!isStarted && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-2xl">
-                <button onClick={startAudio} className="px-16 py-8 border-[3px] border-white text-5xl font-black tracking-[0.3em] hover:bg-white hover:text-black transition-all duration-700 rounded-full uppercase shadow-[0_0_100px_rgba(255,255,255,0.2)]">Engage</button>
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-3xl">
+                <div className="flex flex-col items-center gap-12">
+                  <button onClick={startAudio} className="px-24 py-10 border border-white/20 text-5xl font-black tracking-[0.5em] hover:bg-white hover:text-black transition-all duration-700 rounded-full uppercase shadow-[0_0_150px_rgba(255,255,255,0.1)] bg-white/5 group">
+                    <span className="group-hover:scale-110 block transition-transform">Engage</span>
+                  </button>
+                  <p className="text-white/20 uppercase tracking-[0.4em] text-[10px] font-bold">Multi-voice drone synthesis engine</p>
+                </div>
             </div>
         )}
       </div>

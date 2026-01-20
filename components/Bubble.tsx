@@ -18,13 +18,22 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
   onSelect 
 }) => {
   const bubbleStyles = useMemo(() => {
-    const base = "absolute rounded-full flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-hidden";
-    const border = isSelected ? "border-[6px] border-white shadow-[0_0_50px_rgba(255,255,255,0.4)]" : "border-2 border-white/10 shadow-xl";
+    const base = "absolute flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-hidden liquid-surface";
+    const border = isSelected ? "border-[3px] border-white shadow-[0_0_60px_rgba(255,255,255,0.3)]" : "border border-white/10 shadow-2xl";
+    
     const bg = node.type === 'OSC' 
-        ? (node.isAudible ? 'bg-gradient-to-br from-indigo-600 to-purple-700' : 'bg-gradient-to-br from-slate-700 to-slate-900') 
-        : 'bg-gradient-to-br from-emerald-600 to-teal-800';
+        ? (node.isAudible 
+            ? 'bg-gradient-to-br from-indigo-500 via-purple-600 to-indigo-900' 
+            : 'bg-gradient-to-br from-slate-700 to-slate-900 grayscale opacity-60') 
+        : 'bg-gradient-to-br from-emerald-500 via-teal-600 to-emerald-900';
+        
     return `${base} ${border} ${bg}`;
   }, [isSelected, node.type, node.isAudible]);
+
+  // Ripple speed based on frequency
+  const rippleDuration = node.type === 'OSC' 
+    ? Math.max(0.5, Math.min(4, 15 / (Math.log10(node.frequency + 1) * 5 + 1))) 
+    : 3;
 
   return (
     <div
@@ -34,10 +43,11 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
         top: node.pos.y - node.size / 2,
         width: node.size,
         height: node.size,
-        opacity: isConnecting && !isSelected ? 0.7 : 1,
-        transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+        opacity: isConnecting && !isSelected ? 0.4 : 1,
+        transform: isSelected ? 'scale(1.1)' : 'scale(1)',
         willChange: 'left, top, transform',
         zIndex: isSelected ? 40 : 20,
+        transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
       }}
       onMouseDown={(e) => {
         e.stopPropagation();
@@ -45,19 +55,46 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
         onSelect(node.id);
       }}
     >
-      <div className="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
-      <div className="z-10 text-center text-[9px] font-black uppercase tracking-tighter drop-shadow-md leading-none">
-        <div className="opacity-50 mb-1">{node.type}</div>
-        <div className="truncate w-full px-2">{node.subType}</div>
-      </div>
-      
-      {node.isAudible && node.type === 'OSC' && (
-        <div className="absolute top-1 w-2 h-2 rounded-full bg-white animate-ping" />
+      {/* Background depth shimmer */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/10 pointer-events-none" />
+
+      {/* Centered Ripple Animation (Water Drop Effect) */}
+      {node.isAudible && (
+        <>
+          <div 
+            className="ripple" 
+            style={{ 
+                animationDuration: `${rippleDuration}s`,
+                width: node.size * 0.2,
+                height: node.size * 0.2
+            }} 
+          />
+          <div 
+            className="ripple ripple-delayed" 
+            style={{ 
+                animationDuration: `${rippleDuration}s`,
+                animationDelay: `${rippleDuration / 2}s`,
+                width: node.size * 0.2,
+                height: node.size * 0.2
+            }} 
+          />
+        </>
       )}
 
+      {/* Label Content */}
+      <div className="z-10 text-center pointer-events-none">
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-0.5 leading-none">
+          {node.type}
+        </div>
+        <div className="text-[11px] font-black text-white uppercase tracking-tight truncate max-w-[90%] mx-auto drop-shadow-lg">
+          {node.subType}
+        </div>
+      </div>
+      
+      {/* State indicators */}
       {node.boundTo && (
-        <div className="absolute bottom-2 bg-white/20 text-[7px] px-1 rounded-sm font-black text-white">
-          LINKED
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-sm text-[7px] px-1.5 py-0.5 rounded-full font-black text-white uppercase tracking-tighter">
+          Linked
         </div>
       )}
     </div>
