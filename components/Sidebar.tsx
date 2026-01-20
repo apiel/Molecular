@@ -290,7 +290,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onDelete(selectedNode.id)}
                 className="w-full py-4 bg-red-600/20 text-red-500 border border-red-500/50 hover:bg-red-600/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg"
             >
-                Deconstruct Bubble
+                DELETE MOLECULE
             </button>
         </div>
       </section>

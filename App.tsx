@@ -97,6 +97,45 @@ const xToFreq = (x: number, width: number) => {
   }
 };
 
+const freqToX = (freq: number, width: number) => {
+  const oneThird = width / 3;
+  if (freq <= MID_FREQ) {
+    return (freq / MID_FREQ) * oneThird;
+  } else {
+    const t = (freq - MID_FREQ) / (MAX_FREQ - MID_FREQ);
+    return oneThird + t * (2 * oneThird);
+  }
+};
+
+const getDefaultNodes = (width: number, height: number): SynthNode[] => {
+  const id1 = uuidv4();
+  const id2 = uuidv4();
+  return [
+    {
+      id: id1,
+      type: 'OSC',
+      subType: 'sine',
+      pos: { x: freqToX(70, width), y: height / 2 },
+      size: 140,
+      frequency: 70,
+      modulators: [],
+      color: THEMES[0].colors.oscStart,
+      isAudible: true
+    },
+    {
+      id: id2,
+      type: 'OSC',
+      subType: 'sine',
+      pos: { x: freqToX(7, width), y: height / 2 + 100 },
+      size: 100,
+      frequency: 7,
+      modulators: [],
+      color: THEMES[0].colors.oscStart,
+      isAudible: false
+    }
+  ];
+};
+
 const App: React.FC = () => {
   const [nodes, setNodes] = useState<SynthNode[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -143,6 +182,21 @@ const App: React.FC = () => {
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize with default pair if empty
+  useEffect(() => {
+    if (nodes.length === 0) {
+      const w = window.innerWidth - 320;
+      const h = window.innerHeight;
+      const defaults = getDefaultNodes(w, h);
+      setNodes(defaults);
+      setConnections([{
+        id: uuidv4(),
+        fromId: defaults[1].id,
+        toId: defaults[0].id
+      }]);
+    }
+  }, []);
 
   useEffect(() => {
     const state = {
@@ -203,35 +257,15 @@ const App: React.FC = () => {
     });
   }, [applyFxParams]);
 
-  const startAudio = () => {
+  const startAudio = useCallback(() => {
+    if (isStarted) return;
     audioEngine.init();
     setIsStarted(true);
-
-    if (nodes.length > 0) {
-      rebuildAudioEngine(nodes, connections);
-    } else {
-      const id = uuidv4();
-      const x = 400;
-      const freq = xToFreq(x, window.innerWidth - 320);
-      const first: SynthNode = { 
-        id, 
-        type: 'OSC', 
-        subType: 'sine', 
-        pos: { x: 400, y: 300 }, 
-        size: 120, 
-        frequency: freq, 
-        modulators: [], 
-        color: currentTheme.colors.oscStart, 
-        isAudible: true 
-      };
-      setNodes([first]);
-      audioEngine.createOscillator(id, first.subType as any, first.frequency, first.size / 300, true);
-      setSelectedId(id);
-    }
-  };
+    rebuildAudioEngine(nodes, connections);
+  }, [isStarted, nodes, connections, rebuildAudioEngine]);
 
   const addNode = (type: NodeType) => {
-    if (!isStarted) { startAudio(); return; }
+    if (!isStarted) startAudio();
     const id = uuidv4();
     const w = window.innerWidth - 320;
     const h = window.innerHeight;
@@ -267,13 +301,15 @@ const App: React.FC = () => {
   };
 
   const resetAll = () => {
-    if (!confirm('This will deconstruct the current session. Proceed?')) return;
+    if (!confirm('This will wipe all molecules and connections. Proceed?')) return;
     nodes.forEach(n => audioEngine.removeNode(n.id));
     setNodes([]);
     setConnections([]);
     setSelectedId(null);
     setSelectedConnectionId(null);
     localStorage.removeItem(STORAGE_KEY);
+    // Trigger internal reset to defaults next tick
+    setTimeout(() => window.location.reload(), 10);
   };
 
   const handleExport = () => {
@@ -396,6 +432,7 @@ const App: React.FC = () => {
   }, [selectedId, selectedConnectionId, deleteNode, deleteConnection]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent, id: string) => {
+    if (!isStarted) startAudio();
     setSelectedConnectionId(null);
     if (isConnecting && selectedId && selectedId !== id) {
         audioEngine.connectNodes(selectedId, id);
@@ -419,7 +456,7 @@ const App: React.FC = () => {
       }
       return prev;
     });
-  }, [isConnecting, isBinding, selectedId]);
+  }, [isConnecting, isBinding, selectedId, isStarted, startAudio]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!dragStateRef.current) return;
@@ -470,7 +507,13 @@ const App: React.FC = () => {
   }), [currentTheme]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden" style={themeStyle} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+    <div 
+      className="flex h-screen w-screen overflow-hidden" 
+      style={themeStyle} 
+      onMouseMove={handleMouseMove} 
+      onMouseUp={handleMouseUp} 
+      onMouseDown={() => { if(!isStarted) startAudio(); }}
+    >
       <style>{`
         body { font-family: ${currentTheme.colors.fontFamily}; }
         .glass-panel { background: ${currentTheme.colors.sidebarBg}; }
@@ -603,20 +646,6 @@ const App: React.FC = () => {
         {(isConnecting || isBinding) && (
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-2xl px-12 py-4 rounded-full border border-white/20 text-[11px] font-black uppercase tracking-[0.3em] animate-pulse z-50 shadow-2xl">
                 {isConnecting ? 'Link Signal Destination (Esc to cancel)' : 'Bind Mass Parent (Esc to cancel)'}
-            </div>
-        )}
-
-        {!isStarted && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-3xl">
-                <div className="flex flex-col items-center gap-12 text-center px-4">
-                  <button onClick={startAudio} className="px-24 py-10 border border-white/20 text-5xl font-black tracking-[0.5em] hover:bg-white hover:text-black transition-all duration-700 rounded-full uppercase shadow-[0_0_150px_rgba(255,255,255,0.1)] bg-white/5 group">
-                    <span className="group-hover:scale-110 block transition-transform">{nodes.length > 0 ? 'Resume' : 'Engage'}</span>
-                  </button>
-                  <p className="text-white/20 uppercase tracking-[0.4em] text-[10px] font-bold">Molecular Synthesis Engine</p>
-                  {nodes.length > 0 && (
-                     <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="text-[9px] text-white/10 uppercase tracking-widest hover:text-white/40 transition-colors">Wipe session and start fresh</button>
-                  )}
-                </div>
             </div>
         )}
       </div>
