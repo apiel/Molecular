@@ -3,11 +3,12 @@ import { OscType, FxType } from '../types';
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private noiseBuffer: AudioBuffer | null = null;
   private nodes: Map<string, { 
     main: AudioNode, 
     input?: AudioNode, 
     output: AudioNode,
-    params: { [key: string]: AudioParam },
+    params: { [key: string]: AudioParam | { value: number } },
     modGains: Map<string, GainNode>,
     extraNodes?: { [key: string]: AudioNode },
     outgoingSignalConnections: Set<string>
@@ -22,10 +23,22 @@ class AudioEngine {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
+      this.createNoiseBuffer();
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+  }
+
+  private createNoiseBuffer() {
+    if (!this.ctx) return;
+    const bufferSize = this.ctx.sampleRate * 2;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    this.noiseBuffer = buffer;
   }
 
   public setMasterMute(muted: boolean) {
@@ -37,24 +50,53 @@ class AudioEngine {
   public createOscillator(id: string, type: OscType, freq: number, gain: number, isAudible: boolean) {
     if (!this.ctx || !this.masterGain) return;
 
-    const osc = this.ctx.createOscillator();
+    let mainNode: AudioNode;
+    let params: { [key: string]: AudioParam | { value: number } } = {};
     const g = this.ctx.createGain();
+
+    if (type === 'noise') {
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.noiseBuffer;
+      source.loop = true;
+      source.start();
+      mainNode = source;
+      params = { frequency: { value: 0 }, gain: g.gain }; // Noise freq is dummy
+    } else if (type === 'sample-hold') {
+      // Use ScriptProcessor for S&H (stepped random)
+      const scriptNode = this.ctx.createScriptProcessor(256, 1, 1);
+      let lastStepTime = 0;
+      let currentValue = 0;
+      const freqObj = { value: freq };
+
+      scriptNode.onaudioprocess = (e) => {
+        const output = e.outputBuffer.getChannelData(0);
+        const stepDuration = 1 / Math.max(0.1, freqObj.value);
+        for (let i = 0; i < output.length; i++) {
+          const currentTime = this.ctx!.currentTime + (i / this.ctx!.sampleRate);
+          if (currentTime - lastStepTime > stepDuration) {
+            currentValue = Math.random() * 2 - 1;
+            lastStepTime = currentTime;
+          }
+          output[i] = currentValue;
+        }
+      };
+      mainNode = scriptNode;
+      params = { frequency: freqObj, gain: g.gain };
+    } else {
+      const osc = this.ctx.createOscillator();
+      osc.type = type as OscillatorType;
+      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+      osc.start();
+      mainNode = osc;
+      params = { frequency: osc.frequency, gain: g.gain, detune: osc.detune };
+    }
     
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-    g.gain.setValueAtTime(gain, this.ctx.currentTime);
-    
-    osc.connect(g);
-    osc.start();
+    mainNode.connect(g);
 
     this.nodes.set(id, {
-      main: osc,
+      main: mainNode,
       output: g,
-      params: {
-        frequency: osc.frequency,
-        gain: g.gain,
-        detune: osc.detune
-      },
+      params,
       modGains: new Map(),
       outgoingSignalConnections: new Set()
     });
@@ -66,9 +108,30 @@ class AudioEngine {
 
   public updateOscType(id: string, type: OscType) {
     const node = this.nodes.get(id);
-    if (node && node.main instanceof OscillatorNode) {
-      node.main.type = type;
-    }
+    if (!node || !this.ctx) return;
+
+    const currentParams = node.params;
+    const currentFreq = typeof currentParams.frequency?.value === 'number' ? currentParams.frequency.value : 440;
+    const currentGain = typeof currentParams.gain?.value === 'number' ? currentParams.gain.value : 0.1;
+    
+    // Stop and disconnect old main node
+    try { node.main.disconnect(); } catch (e) {}
+    if ('stop' in node.main) (node.main as any).stop();
+
+    // Recreate with same ID but new type
+    this.createOscillator(id, type, currentFreq, currentGain, true);
+    
+    // Restore connections
+    const newNode = this.nodes.get(id)!;
+    node.modGains.forEach((gain, targetId) => {
+        newNode.modGains.set(targetId, gain);
+        newNode.output.connect(gain);
+    });
+    node.outgoingSignalConnections.forEach(targetId => {
+        newNode.outgoingSignalConnections.add(targetId);
+        const target = this.nodes.get(targetId);
+        if (target?.input) newNode.output.connect(target.input);
+    });
   }
 
   public createEffect(id: string, type: FxType) {
@@ -296,7 +359,11 @@ class AudioEngine {
 
     const param = node.params[paramName];
     if (param) {
+      if (param instanceof AudioParam) {
         param.setTargetAtTime(value, this.ctx!.currentTime, 0.05);
+      } else {
+        param.value = value;
+      }
     }
   }
 
@@ -314,8 +381,8 @@ class AudioEngine {
       from.output.connect(to.input);
       // Ensure the end of the chain is connected to master if it wasn't already
       this.updateAudible(toId, true);
-    } else if (to.params.frequency) {
-      // Modulation connection (FM)
+    } else if (to.params.frequency && to.params.frequency instanceof AudioParam) {
+      // Modulation connection (FM) - Only possible if frequency is an AudioParam (standard OSC)
       const modGain = this.ctx.createGain();
       modGain.gain.setValueAtTime(400, this.ctx.currentTime);
       from.output.connect(modGain);
@@ -356,7 +423,7 @@ class AudioEngine {
     if (node.extraNodes?.lfo) {
         try { (node.extraNodes.lfo as OscillatorNode).stop(); } catch(e) {}
     }
-    if ('stop' in node.main) (node.main as OscillatorNode).stop();
+    if ('stop' in node.main) (node.main as any).stop();
     
     this.nodes.delete(id);
   }

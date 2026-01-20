@@ -63,6 +63,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const y = selectedNode.pos.y;
 
     if (isOsc) {
+      if (selectedNode.subType === 'noise') {
+        return { 
+          x: 'Density', 
+          xVal: 'Wideband', 
+          y: 'Unused', 
+          yVal: 'N/A',
+          xPercent: 100,
+          yPercent: 0
+        };
+      }
       return { 
         x: 'Frequency', 
         xVal: `${selectedNode.frequency.toFixed(3)} Hz`, 
@@ -208,7 +218,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="relative">
             <select 
                 className="w-full bg-black border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
-                // Fix: Replacing invalid CSS property 'ringColor' with standard 'borderColor'
                 style={{ borderColor: theme.colors.accent }}
                 value={selectedNode.subType}
                 onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
@@ -219,6 +228,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <option value="square">Square Wave</option>
                     <option value="sawtooth">Sawtooth Wave</option>
                     <option value="triangle">Triangle Wave</option>
+                    <option value="noise">White Noise</option>
+                    <option value="sample-hold">Sample & Hold</option>
                 </>
                 ) : (
                 <>
