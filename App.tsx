@@ -176,7 +176,7 @@ const App: React.FC = () => {
   const [isStarted, setIsStarted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); 
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
@@ -572,7 +572,7 @@ const App: React.FC = () => {
                   stroke={isSel ? currentTheme.colors.accent : "url(#signalGrad)"} 
                   strokeWidth={isSel ? "5" : "2"} 
                   strokeDasharray={isFM ? "2,2" : "10,5"} 
-                  className={`transition-all ${isHov ? 'opacity-100' : 'opacity-60'}`} 
+                  className={`transition-all ${hoveredConnectionId === conn.id ? 'opacity-100' : 'opacity-60'}`} 
                   fill="none" 
                 />
                 <circle r="3" fill="#fff" filter="blur(1px)">
@@ -599,27 +599,27 @@ const App: React.FC = () => {
           );
         })}
 
-        <div className="absolute top-8 left-8 flex gap-4 z-20">
-            <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Oscillator</button>
-            <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Effect</button>
-            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
+        <div className="absolute top-8 left-8 flex gap-4 z-20 items-center">
+            <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md hover:bg-white/10">Oscillator</button>
+            <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md hover:bg-white/10">Effect</button>
+            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md hover:opacity-80">{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
             
             <button 
                 onClick={toggleTransport} 
                 style={{ 
-                    background: isPlaying ? 'rgba(16, 185, 129, 0.3)' : 'rgba(220, 38, 38, 0.8)',
-                    boxShadow: !isPlaying ? '0 0 30px rgba(220, 38, 38, 0.4)' : 'none'
+                    background: isPlaying ? 'rgba(16, 185, 129, 0.2)' : '#dc2626',
+                    boxShadow: !isPlaying ? '0 0 40px rgba(220, 38, 38, 0.6)' : 'none'
                 }} 
-                className={`px-8 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md flex items-center gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50' : 'text-white border-red-500'}`}
+                className={`px-6 py-2.5 rounded-full font-black tracking-[0.2em] text-[11px] shadow-2xl uppercase transition-all border-2 backdrop-blur-md flex items-center justify-center gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10' : 'text-white border-white/40 hover:scale-105 active:scale-95'}`}
             >
                 {isPlaying ? (
                     <>
-                        <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
+                        <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
                         <span>Stop</span>
                     </>
                 ) : (
                     <>
-                        <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                        <svg className="w-7 h-7 fill-current flex-shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                         <span>Play</span>
                     </>
                 )}
