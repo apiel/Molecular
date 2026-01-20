@@ -1,20 +1,38 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# Molecular
 
-This contains everything you need to run your app locally.
+Molecular is a high-performance, spatial multi-voice drone synthesizer. It uses interactive bubble physics to represent oscillators and effects, allowing you to sculpt complex soundscapes through physical placement and modular routing.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1g2ZIK_boAyM8Orkj6eSkaf3mksbn6c-R
+## Key Features
 
-## Run Locally
+- **Spatial Control**: Drag bubbles across the screen. 
+  - **X-axis**: Primarily controls frequency for Oscillators or the main parameter for Effects.
+  - **Y-axis**: Controls secondary parameters like resonance, feedback, or intensity.
+- **Amplitude**: The size of a bubble directly correlates to its gain (Oscillators) or intensity (Effects).
+- **Modular Flux Routing**: Use the **Route Flux** tool to create signal chains.
+  - **OSC → FX**: Chains the oscillator's signal into the effect processor.
+  - **OSC → OSC**: Creates frequency modulation (FM) for metallic, evolving textures.
+- **Physical Binding**: "Bind" bubbles together in the sidebar to move them as a single rigid group, perfect for creating harmonic chords or fixed frequency offsets.
+- **Visual Feedback**: Real-time ripple animations indicate active signal flow and frequency depth.
+- **Theming**: Four distinct aesthetic profiles (Deep Space, Cyberpunk, Monochrome, Heatwave) to match your sound design mood.
+- **Persistence**: Auto-saves your session locally. You can also **Export** and **Import** patches as JSON files.
 
-**Prerequisites:**  Node.js
+## How to Play
 
+1. **Engage**: Click the center button to start the audio engine.
+2. **Add Nodes**: Use the top menu to create new Oscillators or Effects.
+3. **Route**: Click "Route Flux", then click a source bubble and a destination bubble.
+4. **Tune**: Select a bubble to adjust its waveform (Sine, Square, Saw, Triangle) or effect type in the sidebar.
+5. **Color**: Customize individual bubbles via the "Atmospheric Hue" section in the sidebar.
+6. **Save/Load**: Use Export/Import to share your patches or save them for later.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Audio Mapping Reference
+
+- **Oscillators**: Left-most third of the screen maps to 0-20Hz (Low-frequency modulation). The rest maps up to 2000Hz.
+- **Filters**: X = Cutoff (0-5000Hz), Y = Resonance.
+- **Delay**: X = Delay Time, Y = Feedback.
+- **Distortion**: X = Drive, Y = Waveform Shaper.
+- **Reverb**: Y = Diffusion.
+
+---
+Designed for immersive drone synthesis and modular sound exploration.

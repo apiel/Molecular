@@ -6,7 +6,7 @@ import { Bubble } from './components/Bubble';
 import { Sidebar } from './components/Sidebar';
 import { audioEngine } from './services/audioEngine';
 
-const STORAGE_KEY = 'bubble_drone_synth_v1';
+const STORAGE_KEY = 'molecular_synth_v1';
 
 const MIN_FREQ = 0;
 const MID_FREQ = 20;
@@ -286,7 +286,7 @@ const App: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `drone-patch-${new Date().getTime()}.json`;
+    a.download = `molecular-patch-${new Date().getTime()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -325,7 +325,6 @@ const App: React.FC = () => {
       }
     };
     reader.readAsText(file);
-    // Reset input so the same file can be imported again if needed
     e.target.value = '';
   };
 
@@ -617,7 +616,7 @@ const App: React.FC = () => {
                   <button onClick={startAudio} className="px-24 py-10 border border-white/20 text-5xl font-black tracking-[0.5em] hover:bg-white hover:text-black transition-all duration-700 rounded-full uppercase shadow-[0_0_150px_rgba(255,255,255,0.1)] bg-white/5 group">
                     <span className="group-hover:scale-110 block transition-transform">{nodes.length > 0 ? 'Resume' : 'Engage'}</span>
                   </button>
-                  <p className="text-white/20 uppercase tracking-[0.4em] text-[10px] font-bold">Multi-voice drone synthesis engine</p>
+                  <p className="text-white/20 uppercase tracking-[0.4em] text-[10px] font-bold">Molecular Synthesis Engine</p>
                   {nodes.length > 0 && (
                      <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="text-[9px] text-white/10 uppercase tracking-widest hover:text-white/40 transition-colors">Wipe session and start fresh</button>
                   )}

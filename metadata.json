@@ -1,6 +1,6 @@
 {
-  "name": "Bubble Drone Synth",
-  "description": "A highly visual, interactive multi-voice drone synthesizer where you drag bubbles to control oscillators, effects, and modulation patterns.",
+  "name": "Molecular",
+  "description": "A spatial multi-voice drone synthesizer using interactive bubble physics, FM synthesis, and modular flux routing.",
   "requestFramePermissions": [
     "microphone"
   ]

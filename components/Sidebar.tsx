@@ -209,7 +209,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="relative">
             <select 
                 className="w-full bg-black border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
-                style={{ ringColor: theme.colors.accent }}
+                // Fix: Replacing invalid CSS property 'ringColor' with standard 'borderColor'
+                style={{ borderColor: theme.colors.accent }}
                 value={selectedNode.subType}
                 onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
             >
