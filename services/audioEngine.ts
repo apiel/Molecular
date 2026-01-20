@@ -10,8 +10,10 @@ class AudioEngine {
     output: AudioNode,
     params: { [key: string]: AudioParam },
     modGains: Map<string, GainNode>,
-    extraNodes?: { [key: string]: AudioNode }
+    extraNodes?: { [key: string]: AudioNode },
+    outgoingSignalConnections: Set<string>
   }> = new Map();
+  private isMuted: boolean = false;
 
   constructor() {}
 
@@ -27,6 +29,12 @@ class AudioEngine {
     }
   }
 
+  public setMasterMute(muted: boolean) {
+    this.isMuted = muted;
+    if (!this.masterGain || !this.ctx) return;
+    this.masterGain.gain.setTargetAtTime(muted ? 0 : 0.3, this.ctx.currentTime, 0.1);
+  }
+
   public createOscillator(id: string, type: OscType, freq: number, gain: number, isAudible: boolean) {
     if (!this.ctx || !this.masterGain) return;
 
@@ -40,10 +48,6 @@ class AudioEngine {
     osc.connect(g);
     osc.start();
 
-    if (isAudible) {
-      g.connect(this.masterGain);
-    }
-
     this.nodes.set(id, {
       main: osc,
       output: g,
@@ -52,8 +56,20 @@ class AudioEngine {
         gain: g.gain,
         detune: osc.detune
       },
-      modGains: new Map()
+      modGains: new Map(),
+      outgoingSignalConnections: new Set()
     });
+
+    if (isAudible) {
+      this.updateAudible(id, true);
+    }
+  }
+
+  public updateOscType(id: string, type: OscType) {
+    const node = this.nodes.get(id);
+    if (node && node.main instanceof OscillatorNode) {
+      node.main.type = type;
+    }
   }
 
   public createEffect(id: string, type: FxType) {
@@ -90,7 +106,6 @@ class AudioEngine {
         input = shaper;
         output = distOutputGain;
         shaper.curve = this.makeDistortionCurve(100);
-        // We simulate "shape" by modifying the curve or using the gain parameter
         params = { amount: distOutputGain.gain }; 
         extraNodes = { shaper };
         break;
@@ -112,7 +127,8 @@ class AudioEngine {
       output,
       params,
       modGains: new Map(),
-      extraNodes
+      extraNodes,
+      outgoingSignalConnections: new Set()
     });
   }
 
@@ -144,7 +160,10 @@ class AudioEngine {
     const node = this.nodes.get(id);
     if (!node || !this.masterGain) return;
     try { node.output.disconnect(this.masterGain); } catch(e) {}
-    if (isAudible) node.output.connect(this.masterGain);
+    // Only connect to master if it should be audible and doesn't have an outgoing FX chain
+    if (isAudible && node.outgoingSignalConnections.size === 0) {
+      node.output.connect(this.masterGain);
+    }
   }
 
   public updateParam(id: string, paramName: string, value: number) {
@@ -169,9 +188,18 @@ class AudioEngine {
     if (!from || !to || !this.ctx) return;
 
     if (to.input) {
+      // Signal connection (Chain)
+      from.outgoingSignalConnections.add(toId);
+      // Disconnect from master since we are now going into an effect
+      try { from.output.disconnect(this.masterGain!); } catch(e) {}
+      
       from.output.connect(to.input);
-      to.output.connect(this.masterGain!);
+      // Ensure the end of the chain is connected to master
+      if (to.outgoingSignalConnections.size === 0) {
+        try { to.output.connect(this.masterGain!); } catch(e) {}
+      }
     } else if (to.params.frequency) {
+      // Modulation connection (FM)
       const modGain = this.ctx.createGain();
       modGain.gain.setValueAtTime(400, this.ctx.currentTime);
       from.output.connect(modGain);
@@ -186,8 +214,21 @@ class AudioEngine {
     if (!from || !to) return;
 
     if (to.input) {
+      // Signal disconnection
+      from.outgoingSignalConnections.delete(toId);
       try { from.output.disconnect(to.input); } catch(e) {}
+      
+      // If "from" is not going anywhere else, maybe it should go back to master?
+      // For simplicity, we check if it's an OSC that was supposed to be audible
+      if (from.outgoingSignalConnections.size === 0) {
+          // Note: In a real app we'd track if it was previously audible.
+          // For this drone synth, we'll try to reconnect OSCs if they have no output.
+          if (from.main instanceof OscillatorNode) {
+              from.output.connect(this.masterGain!);
+          }
+      }
     } else {
+      // Modulation disconnection
       const modGain = from.modGains.get(toId);
       if (modGain) {
         try { from.output.disconnect(modGain); modGain.disconnect(); } catch(e) {}

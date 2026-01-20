@@ -29,6 +29,7 @@ const App: React.FC = () => {
   const [isStarted, setIsStarted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -74,6 +75,12 @@ const App: React.FC = () => {
     setSelectedId(id);
   };
 
+  const toggleMute = () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    audioEngine.setMasterMute(nextMuted);
+  };
+
   const updateNode = useCallback((id: string, updates: Partial<SynthNode>) => {
     setNodes(prev => prev.map(n => {
       if (n.id === id) {
@@ -84,6 +91,9 @@ const App: React.FC = () => {
             audioEngine.updateParam(id, updated.type === 'OSC' ? 'gain' : 'intensity', val);
         }
         if (updates.frequency !== undefined) audioEngine.updateParam(id, 'frequency', updated.frequency);
+        if (updates.subType !== undefined && updated.type === 'OSC') {
+            audioEngine.updateOscType(id, updates.subType as any);
+        }
         return updated;
       }
       return n;
@@ -198,6 +208,8 @@ const App: React.FC = () => {
                 } else if (n.subType === 'distortion') {
                     audioEngine.updateParam(n.id, 'amount', (updatedPos.x / effectiveW) * 5);
                     audioEngine.updateParam(n.id, 'distortionCurve', (h - updatedPos.y) / 5);
+                } else if (n.subType === 'reverb') {
+                    audioEngine.updateParam(n.id, 'diffusion', (h - updatedPos.y) / h);
                 }
                 return { ...n, pos: updatedPos };
             }
@@ -247,14 +259,28 @@ const App: React.FC = () => {
           })}
         </svg>
 
-        {nodes.map(node => (
-          <Bubble key={node.id} node={node} isSelected={selectedId === node.id} isConnecting={isConnecting || isBinding} onMouseDown={handleMouseDown} onSelect={setSelectedId} />
-        ))}
+        {nodes.map(node => {
+          const hasIncoming = connections.some(c => c.toId === node.id);
+          return (
+            <Bubble 
+                key={node.id} 
+                node={node} 
+                isSelected={selectedId === node.id} 
+                isConnecting={isConnecting || isBinding} 
+                hasIncoming={hasIncoming}
+                onMouseDown={handleMouseDown} 
+                onSelect={setSelectedId} 
+            />
+          );
+        })}
 
         <div className="absolute top-8 left-8 flex gap-4 z-20">
             <button onClick={() => addNode('OSC')} className="px-6 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/40 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border border-white/10 backdrop-blur-md">Oscillator</button>
             <button onClick={() => addNode('FX')} className="px-6 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/40 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border border-white/10 backdrop-blur-md">Effect</button>
             <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} className={`px-6 py-2.5 ${isConnecting ? 'bg-white text-black' : 'bg-blue-600/20'} rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border border-white/10 backdrop-blur-md`}>{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
+            <button onClick={toggleMute} className={`px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border border-white/10 backdrop-blur-md ${isMuted ? 'bg-red-600/40 text-red-100' : 'bg-white/5 text-white/60'}`}>
+                {isMuted ? 'Unmute' : 'Mute All'}
+            </button>
         </div>
 
         {/* frequency zones markers */}

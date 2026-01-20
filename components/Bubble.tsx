@@ -6,6 +6,7 @@ interface BubbleProps {
   node: SynthNode;
   isSelected: boolean;
   isConnecting: boolean;
+  hasIncoming: boolean;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
   onSelect: (id: string) => void;
 }
@@ -14,6 +15,7 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
   node, 
   isSelected, 
   isConnecting,
+  hasIncoming,
   onMouseDown, 
   onSelect 
 }) => {
@@ -30,10 +32,13 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
     return `${base} ${border} ${bg}`;
   }, [isSelected, node.type, node.isAudible]);
 
-  // Ripple speed based on frequency
+  // Ripple speed based on frequency for OSC, or static for FX
   const rippleDuration = node.type === 'OSC' 
     ? Math.max(0.5, Math.min(4, 15 / (Math.log10(node.frequency + 1) * 5 + 1))) 
     : 3;
+
+  // Ripples show if it's an audible OSC or an FX receiving signal
+  const showRipples = (node.type === 'OSC' && node.isAudible) || (node.type === 'FX' && hasIncoming);
 
   return (
     <div
@@ -59,7 +64,7 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
       <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/10 pointer-events-none" />
 
       {/* Centered Ripple Animation (Water Drop Effect) */}
-      {node.isAudible && (
+      {showRipples && (
         <>
           <div 
             className="ripple" 

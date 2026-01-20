@@ -136,22 +136,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Profile</label>
           <select 
             className="w-full bg-black border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
+            style={{ colorScheme: 'dark' }}
             value={selectedNode.subType}
             onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
           >
             {isOsc ? (
               <>
-                <option value="sine">Sine</option>
-                <option value="square">Square</option>
-                <option value="sawtooth">Sawtooth</option>
-                <option value="triangle">Triangle</option>
+                <option value="sine" className="bg-[#111] text-white">Sine</option>
+                <option value="square" className="bg-[#111] text-white">Square</option>
+                <option value="sawtooth" className="bg-[#111] text-white">Sawtooth</option>
+                <option value="triangle" className="bg-[#111] text-white">Triangle</option>
               </>
             ) : (
               <>
-                <option value="filter">Filter</option>
-                <option value="delay">Delay</option>
-                <option value="distortion">Distortion</option>
-                <option value="reverb">Reverb</option>
+                <option value="filter" className="bg-[#111] text-white">Filter</option>
+                <option value="delay" className="bg-[#111] text-white">Delay</option>
+                <option value="distortion" className="bg-[#111] text-white">Distortion</option>
+                <option value="reverb" className="bg-[#111] text-white">Reverb</option>
               </>
             )}
           </select>
@@ -169,17 +170,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {!isOsc && (
-            <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
-                <span>Y: {map.y}</span>
-                <span className="text-white">{map.yVal}</span>
-              </div>
-              <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 transition-all duration-75" style={{ width: `${map.yPercent}%` }} />
-              </div>
+          <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+              <span>Y: {map.y}</span>
+              <span className="text-white">{map.yVal}</span>
             </div>
-          )}
+            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 transition-all duration-75" style={{ width: `${map.yPercent}%` }} />
+            </div>
+          </div>
         </div>
 
         <div className="space-y-3">
