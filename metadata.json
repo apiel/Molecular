@@ -1,0 +1,7 @@
+{
+  "name": "Bubble Drone Synth",
+  "description": "A highly visual, interactive multi-voice drone synthesizer where you drag bubbles to control oscillators, effects, and modulation patterns.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
