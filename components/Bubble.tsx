@@ -46,6 +46,7 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
     : 3;
 
   const showRipples = (node.type === 'OSC' && node.isAudible) || (node.type === 'FX' && hasIncoming);
+  const baseColor = node.color || (node.type === 'OSC' ? theme.colors.oscStart : theme.colors.fxStart);
 
   return (
     <div
@@ -68,6 +69,17 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
         onSelect(node.id);
       }}
     >
+      {/* Persistant Halo Effect behind the bubble */}
+      <div 
+        className="bubble-halo-effect" 
+        style={{ 
+            width: node.size * 1.5, 
+            height: node.size * 1.5, 
+            backgroundColor: baseColor,
+            animationDuration: showRipples ? '3s' : '8s'
+        }} 
+      />
+
       <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/10 pointer-events-none" />
 
       {showRipples && (

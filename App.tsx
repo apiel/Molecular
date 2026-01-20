@@ -606,10 +606,9 @@ const App: React.FC = () => {
             <button 
                 onClick={toggleTransport} 
                 style={{ 
-                    background: isPlaying ? 'rgba(16, 185, 129, 0.2)' : '#dc2626',
-                    boxShadow: !isPlaying ? '0 0 40px rgba(220, 38, 38, 0.6)' : 'none'
+                    background: isPlaying ? 'rgba(16, 185, 129, 0.2)' : '#dc2626'
                 }} 
-                className={`px-6 py-2.5 rounded-full font-black tracking-[0.2em] text-[11px] shadow-2xl uppercase transition-all border-2 backdrop-blur-md flex items-center justify-center gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10' : 'text-white border-white/40 hover:scale-105 active:scale-95'}`}
+                className={`px-6 py-2.5 rounded-full font-black tracking-[0.2em] text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md flex items-center justify-center gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10' : 'text-white border-white/40 hover:scale-105 active:scale-95'}`}
             >
                 {isPlaying ? (
                     <>
