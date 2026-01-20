@@ -115,7 +115,7 @@ const getDefaultNodes = (width: number, height: number): SynthNode[] => {
       id: id1,
       type: 'OSC',
       subType: 'sine',
-      pos: { x: freqToX(70, width), y: height / 2 },
+      pos: { x: freqToX(70, width), y: height / 2 - 50 },
       size: 140,
       frequency: 70,
       modulators: [],
@@ -176,7 +176,7 @@ const App: React.FC = () => {
   const [isStarted, setIsStarted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
@@ -294,10 +294,11 @@ const App: React.FC = () => {
     setSelectedId(id);
   };
 
-  const toggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    audioEngine.setMasterMute(nextMuted);
+  const toggleTransport = () => {
+    if (!isStarted) startAudio();
+    const nextPlaying = !isPlaying;
+    setIsPlaying(nextPlaying);
+    audioEngine.setMasterMute(!nextPlaying);
   };
 
   const resetAll = () => {
@@ -308,7 +309,6 @@ const App: React.FC = () => {
     setSelectedId(null);
     setSelectedConnectionId(null);
     localStorage.removeItem(STORAGE_KEY);
-    // Trigger internal reset to defaults next tick
     setTimeout(() => window.location.reload(), 10);
   };
 
@@ -603,8 +603,26 @@ const App: React.FC = () => {
             <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Oscillator</button>
             <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Effect</button>
             <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
-            <button onClick={toggleMute} style={{ background: isMuted ? 'rgba(220, 38, 38, 0.4)' : currentTheme.colors.buttonBg }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">
-                {isMuted ? 'Unmute' : 'Mute All'}
+            
+            <button 
+                onClick={toggleTransport} 
+                style={{ 
+                    background: isPlaying ? 'rgba(16, 185, 129, 0.3)' : 'rgba(220, 38, 38, 0.8)',
+                    boxShadow: !isPlaying ? '0 0 30px rgba(220, 38, 38, 0.4)' : 'none'
+                }} 
+                className={`px-8 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md flex items-center gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50' : 'text-white border-red-500'}`}
+            >
+                {isPlaying ? (
+                    <>
+                        <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
+                        <span>Stop</span>
+                    </>
+                ) : (
+                    <>
+                        <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                        <span>Play</span>
+                    </>
+                )}
             </button>
             
             <div className="flex gap-2 ml-4">

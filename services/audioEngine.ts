@@ -14,7 +14,7 @@ class AudioEngine {
     outgoingSignalConnections: Set<string>,
     isAudiblePreference: boolean
   }> = new Map();
-  private isMuted: boolean = false;
+  private isMuted: boolean = true; // Default to muted (Stopped)
 
   constructor() {}
 
@@ -22,7 +22,8 @@ class AudioEngine {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+      // Start at 0 gain because app starts in "Stop" state
+      this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
       this.createNoiseBuffer();
     }
@@ -45,6 +46,7 @@ class AudioEngine {
   public setMasterMute(muted: boolean) {
     this.isMuted = muted;
     if (!this.masterGain || !this.ctx) return;
+    // Standard drone level is 0.3 when playing, 0 when stopped
     this.masterGain.gain.setTargetAtTime(muted ? 0 : 0.3, this.ctx.currentTime, 0.1);
   }
 
