@@ -174,17 +174,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <section className="space-y-6 flex-1">
         <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Status</span>
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Audio</span>
           <div className="flex gap-4">
-              {isOsc && (
-                <button 
+              <button 
                 onClick={() => onUpdate(selectedNode.id, { isAudible: !selectedNode.isAudible })}
                 className={`w-12 h-6 rounded-full transition-all relative ${selectedNode.isAudible ? 'shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'opacity-40'}`}
                 style={{ background: selectedNode.isAudible ? theme.colors.accent : '#333' }}
-                >
-                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${selectedNode.isAudible ? 'left-6.5' : 'left-0.5'}`} />
-                </button>
-              )}
+              >
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${selectedNode.isAudible ? 'left-[26px]' : 'left-0.5'}`} />
+              </button>
           </div>
         </div>
 

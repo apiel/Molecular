@@ -188,6 +188,7 @@ const App: React.FC = () => {
         audioEngine.createOscillator(node.id, node.subType as any, node.frequency, node.size / 300, node.isAudible);
       } else {
         audioEngine.createEffect(node.id, node.subType as any);
+        audioEngine.updateAudible(node.id, node.isAudible);
       }
     });
 
@@ -246,7 +247,7 @@ const App: React.FC = () => {
       frequency: freq,
       modulators: [],
       color: type === 'OSC' ? currentTheme.colors.oscStart : currentTheme.colors.fxStart,
-      isAudible: type === 'OSC'
+      isAudible: true
     };
     
     setNodes(prev => [...prev, newNode]);
@@ -254,6 +255,7 @@ const App: React.FC = () => {
         audioEngine.createOscillator(id, newNode.subType as any, newNode.frequency, newNode.size / 300, true);
     } else {
         audioEngine.createEffect(id, newNode.subType as any);
+        audioEngine.updateAudible(id, true);
     }
     setSelectedId(id);
   };
@@ -304,7 +306,6 @@ const App: React.FC = () => {
         const parsed = JSON.parse(event.target?.result as string);
         if (!parsed.nodes || !parsed.connections) throw new Error('Invalid format');
 
-        // Cleanup existing audio
         nodes.forEach(n => audioEngine.removeNode(n.id));
 
         setNodes(parsed.nodes);
@@ -312,7 +313,6 @@ const App: React.FC = () => {
         const theme = THEMES.find(t => t.id === parsed.themeId) || THEMES[0];
         setCurrentTheme(theme);
         
-        // If engine is already running, rebuild it immediately
         if (isStarted) {
           rebuildAudioEngine(parsed.nodes, parsed.connections);
         }
@@ -490,7 +490,6 @@ const App: React.FC = () => {
       />
 
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
-        {/* Signal Lines / Flux connections */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
             <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -578,7 +577,6 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* Theme Selector UI */}
         <div className="absolute top-8 right-8 z-20 flex flex-col items-end gap-2">
             <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 px-2">Atmosphere</label>
             <div className="relative">
@@ -596,7 +594,6 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* frequency zones markers */}
         <div className="absolute inset-y-0 left-0 w-1/3 border-r border-white/5 pointer-events-none z-10 flex flex-col justify-end p-8">
           <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr]">
             Granular Depth (0-20Hz)

@@ -11,7 +11,8 @@ class AudioEngine {
     params: { [key: string]: AudioParam | { value: number } },
     modGains: Map<string, GainNode>,
     extraNodes?: { [key: string]: AudioNode },
-    outgoingSignalConnections: Set<string>
+    outgoingSignalConnections: Set<string>,
+    isAudiblePreference: boolean
   }> = new Map();
   private isMuted: boolean = false;
 
@@ -60,9 +61,8 @@ class AudioEngine {
       source.loop = true;
       source.start();
       mainNode = source;
-      params = { frequency: { value: 0 }, gain: g.gain }; // Noise freq is dummy
+      params = { frequency: { value: 0 }, gain: g.gain }; 
     } else if (type === 'sample-hold') {
-      // Use ScriptProcessor for S&H (stepped random)
       const scriptNode = this.ctx.createScriptProcessor(256, 1, 1);
       let lastStepTime = 0;
       let currentValue = 0;
@@ -98,12 +98,11 @@ class AudioEngine {
       output: g,
       params,
       modGains: new Map(),
-      outgoingSignalConnections: new Set()
+      outgoingSignalConnections: new Set(),
+      isAudiblePreference: isAudible
     });
 
-    if (isAudible) {
-      this.updateAudible(id, true);
-    }
+    this.updateAudible(id, isAudible);
   }
 
   public updateOscType(id: string, type: OscType) {
@@ -113,15 +112,13 @@ class AudioEngine {
     const currentParams = node.params;
     const currentFreq = typeof currentParams.frequency?.value === 'number' ? currentParams.frequency.value : 440;
     const currentGain = typeof currentParams.gain?.value === 'number' ? currentParams.gain.value : 0.1;
+    const currentAudible = node.isAudiblePreference;
     
-    // Stop and disconnect old main node
     try { node.main.disconnect(); } catch (e) {}
     if ('stop' in node.main) (node.main as any).stop();
 
-    // Recreate with same ID but new type
-    this.createOscillator(id, type, currentFreq, currentGain, true);
+    this.createOscillator(id, type, currentFreq, currentGain, currentAudible);
     
-    // Restore connections
     const newNode = this.nodes.get(id)!;
     node.modGains.forEach((gain, targetId) => {
         newNode.modGains.set(targetId, gain);
@@ -189,7 +186,7 @@ class AudioEngine {
         bitShaper.connect(bitOutput);
         input = bitShaper;
         output = bitOutput;
-        params = { bits: bitOutput.gain }; // Hack to use generic gain as bits param in UI
+        params = { bits: bitOutput.gain }; 
         extraNodes = { shaper: bitShaper };
         break;
       }
@@ -225,9 +222,9 @@ class AudioEngine {
         lfoGain.connect(delay.delayTime);
         lfo.start();
         
-        chorusIn.connect(chorusOut); // dry
+        chorusIn.connect(chorusOut); 
         chorusIn.connect(delay);
-        delay.connect(chorusOut); // wet
+        delay.connect(chorusOut); 
         
         input = chorusIn;
         output = chorusOut;
@@ -277,7 +274,8 @@ class AudioEngine {
       params,
       modGains: new Map(),
       extraNodes,
-      outgoingSignalConnections: new Set()
+      outgoingSignalConnections: new Set(),
+      isAudiblePreference: true
     });
   }
 
@@ -333,9 +331,9 @@ class AudioEngine {
     const node = this.nodes.get(id);
     if (!node || !this.masterGain) return;
     
+    node.isAudiblePreference = isAudible;
     try { node.output.disconnect(this.masterGain); } catch(e) {}
     
-    // Only connect to master if it is flagged audible AND has no other signal outputs.
     if (isAudible && node.outgoingSignalConnections.size === 0) {
       node.output.connect(this.masterGain);
     }
@@ -373,16 +371,12 @@ class AudioEngine {
     if (!from || !to || !this.ctx) return;
 
     if (to.input) {
-      // Signal connection (Chain)
       from.outgoingSignalConnections.add(toId);
-      // Disconnect from master since we are now going into an effect
       try { from.output.disconnect(this.masterGain!); } catch(e) {}
       
       from.output.connect(to.input);
-      // Ensure the end of the chain is connected to master if it wasn't already
-      this.updateAudible(toId, true);
+      this.updateAudible(toId, to.isAudiblePreference);
     } else if (to.params.frequency && to.params.frequency instanceof AudioParam) {
-      // Modulation connection (FM) - Only possible if frequency is an AudioParam (standard OSC)
       const modGain = this.ctx.createGain();
       modGain.gain.setValueAtTime(400, this.ctx.currentTime);
       from.output.connect(modGain);
@@ -399,8 +393,7 @@ class AudioEngine {
     if (to.input) {
       from.outgoingSignalConnections.delete(toId);
       try { from.output.disconnect(to.input); } catch(e) {}
-      // If "from" is no longer chaining to anything, it should go back to master (if audible)
-      this.updateAudible(fromId, true);
+      this.updateAudible(fromId, from.isAudiblePreference);
     } else {
       const modGain = from.modGains.get(toId);
       if (modGain) {
@@ -414,12 +407,9 @@ class AudioEngine {
     const node = this.nodes.get(id);
     if (!node) return;
     
-    // Disconnect outputs
     try { node.output.disconnect(); } catch(e) {}
-    // Disconnect inputs
     if (node.input) try { node.input.disconnect(); } catch(e) {}
     
-    // Stop extra processing
     if (node.extraNodes?.lfo) {
         try { (node.extraNodes.lfo as OscillatorNode).stop(); } catch(e) {}
     }
