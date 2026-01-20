@@ -120,6 +120,17 @@ class AudioEngine {
         extraNodes = { shaper };
         break;
       }
+      case 'bitcrusher': {
+        const bitShaper = this.ctx.createWaveShaper();
+        const bitOutput = this.ctx.createGain();
+        bitShaper.curve = this.makeBitcrushCurve(8);
+        bitShaper.connect(bitOutput);
+        input = bitShaper;
+        output = bitOutput;
+        params = { bits: bitOutput.gain }; // Hack to use generic gain as bits param in UI
+        extraNodes = { shaper: bitShaper };
+        break;
+      }
       case 'phaser': {
         const phaserFilter = this.ctx.createBiquadFilter();
         phaserFilter.type = 'allpass';
@@ -135,6 +146,31 @@ class AudioEngine {
         output = phaserFilter;
         params = { speed: phaserLfo.frequency, depth: phaserLfoGain.gain };
         extraNodes = { lfo: phaserLfo, lfoGain: phaserLfoGain };
+        break;
+      }
+      case 'chorus': {
+        const chorusIn = this.ctx.createGain();
+        const chorusOut = this.ctx.createGain();
+        const delay = this.ctx.createDelay();
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        
+        delay.delayTime.value = 0.03;
+        lfo.frequency.value = 1.5;
+        lfoGain.gain.value = 0.002;
+        
+        lfo.connect(lfoGain);
+        lfoGain.connect(delay.delayTime);
+        lfo.start();
+        
+        chorusIn.connect(chorusOut); // dry
+        chorusIn.connect(delay);
+        delay.connect(chorusOut); // wet
+        
+        input = chorusIn;
+        output = chorusOut;
+        params = { speed: lfo.frequency, intensity: lfoGain.gain };
+        extraNodes = { lfo, lfoGain, delay };
         break;
       }
       case 'tremolo': {
@@ -220,12 +256,24 @@ class AudioEngine {
     return curve;
   }
 
+  public makeBitcrushCurve(bits: number) {
+    const n_samples = 44100;
+    const curve = new Float32Array(n_samples);
+    const steps = Math.pow(2, bits);
+    for (let i = 0; i < n_samples; ++i) {
+      const x = (i * 2) / n_samples - 1;
+      curve[i] = Math.round(x * steps) / steps;
+    }
+    return curve;
+  }
+
   public updateAudible(id: string, isAudible: boolean) {
     const node = this.nodes.get(id);
     if (!node || !this.masterGain) return;
     
     try { node.output.disconnect(this.masterGain); } catch(e) {}
     
+    // Only connect to master if it is flagged audible AND has no other signal outputs.
     if (isAudible && node.outgoingSignalConnections.size === 0) {
       node.output.connect(this.masterGain);
     }
@@ -241,6 +289,12 @@ class AudioEngine {
         return;
     }
 
+    if (paramName === 'bitCurve') {
+        const shaper = node.extraNodes?.shaper as WaveShaperNode;
+        if (shaper) shaper.curve = this.makeBitcrushCurve(value);
+        return;
+    }
+
     const param = node.params[paramName];
     if (param) {
         param.setTargetAtTime(value, this.ctx!.currentTime, 0.05);
@@ -253,12 +307,16 @@ class AudioEngine {
     if (!from || !to || !this.ctx) return;
 
     if (to.input) {
+      // Signal connection (Chain)
       from.outgoingSignalConnections.add(toId);
+      // Disconnect from master since we are now going into an effect
       try { from.output.disconnect(this.masterGain!); } catch(e) {}
       
       from.output.connect(to.input);
+      // Ensure the end of the chain is connected to master if it wasn't already
       this.updateAudible(toId, true);
     } else if (to.params.frequency) {
+      // Modulation connection (FM)
       const modGain = this.ctx.createGain();
       modGain.gain.setValueAtTime(400, this.ctx.currentTime);
       from.output.connect(modGain);
@@ -275,6 +333,7 @@ class AudioEngine {
     if (to.input) {
       from.outgoingSignalConnections.delete(toId);
       try { from.output.disconnect(to.input); } catch(e) {}
+      // If "from" is no longer chaining to anything, it should go back to master (if audible)
       this.updateAudible(fromId, true);
     } else {
       const modGain = from.modGains.get(toId);
@@ -288,12 +347,18 @@ class AudioEngine {
   public removeNode(id: string) {
     const node = this.nodes.get(id);
     if (!node) return;
+    
+    // Disconnect outputs
     try { node.output.disconnect(); } catch(e) {}
+    // Disconnect inputs
     if (node.input) try { node.input.disconnect(); } catch(e) {}
+    
+    // Stop extra processing
     if (node.extraNodes?.lfo) {
         try { (node.extraNodes.lfo as OscillatorNode).stop(); } catch(e) {}
     }
     if ('stop' in node.main) (node.main as OscillatorNode).stop();
+    
     this.nodes.delete(id);
   }
 }

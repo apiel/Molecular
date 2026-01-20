@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,6 +93,7 @@ const App: React.FC = () => {
 
         if (updates.subType !== undefined && updated.type === 'FX') {
             audioEngine.updateEffectType(id, updates.subType as any);
+            // Re-connect all existing connections involving this node
             connections.forEach(conn => {
                 if (conn.fromId === id || conn.toId === id) {
                     audioEngine.connectNodes(conn.fromId, conn.toId);
@@ -141,18 +143,28 @@ const App: React.FC = () => {
     } else if (node.subType === 'tremolo') {
         audioEngine.updateParam(id, 'rate', (x / w) * 20);
         audioEngine.updateParam(id, 'intensity', (h - y) / h);
+    } else if (node.subType === 'bitcrusher') {
+        audioEngine.updateParam(id, 'bitCurve', Math.max(1, (h - y) / h * 16));
+    } else if (node.subType === 'chorus') {
+        audioEngine.updateParam(id, 'speed', (x / w) * 5);
+        audioEngine.updateParam(id, 'intensity', (h - y) / h * 0.01);
     }
   };
 
   const deleteNode = useCallback((id: string) => {
-    setNodes(prev => prev.filter(n => n.id !== id));
-    setConnections(prev => {
-      prev.filter(c => c.fromId === id || c.toId === id).forEach(c => audioEngine.disconnectNodes(c.fromId, c.toId));
-      return prev.filter(c => c.fromId !== id && c.toId !== id);
+    // Sever all audio connections first
+    connections.forEach(c => {
+      if (c.fromId === id || c.toId === id) {
+        audioEngine.disconnectNodes(c.fromId, c.toId);
+      }
     });
+
+    setConnections(prev => prev.filter(c => c.fromId !== id && c.toId !== id));
+    setNodes(prev => prev.filter(n => n.id !== id));
+    
     audioEngine.removeNode(id);
     setSelectedId(null);
-  }, []);
+  }, [connections]);
 
   const deleteConnection = useCallback((id: string) => {
     setConnections(prev => {
@@ -268,31 +280,56 @@ const App: React.FC = () => {
                 <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
                 <stop offset="100%" stopColor="#34d399" stopOpacity="0.4" />
             </linearGradient>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
           </defs>
           {connections.map((conn) => {
             const from = nodes.find(n => n.id === conn.fromId);
             const to = nodes.find(n => n.id === conn.toId);
             if (!from || !to) return null;
             const isSel = selectedConnectionId === conn.id;
+            const isHov = hoveredConnectionId === conn.id;
             const d = `M ${from.pos.x} ${from.pos.y} L ${to.pos.x} ${to.pos.y}`;
             const isFM = to.type === 'OSC';
             
             return (
-              <g key={conn.id} className="pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedConnectionId(conn.id); setSelectedId(null); }}>
+              <g 
+                key={conn.id} 
+                className="pointer-events-auto cursor-pointer" 
+                onClick={(e) => { e.stopPropagation(); setSelectedConnectionId(conn.id); setSelectedId(null); }}
+                onMouseEnter={() => setHoveredConnectionId(conn.id)}
+                onMouseLeave={() => setHoveredConnectionId(null)}
+              >
                 {/* Invisible hit area for easier selection */}
                 <path 
                   d={d}
                   stroke="transparent" 
-                  strokeWidth="20" 
+                  strokeWidth="30" 
                   className="cursor-pointer"
                   fill="none"
                 />
+                {/* Secondary glow on hover/select */}
+                {(isSel || isHov) && (
+                  <path 
+                    d={d}
+                    stroke="#fff" 
+                    strokeWidth={isSel ? "8" : "6"} 
+                    strokeOpacity="0.2"
+                    filter="url(#glow)"
+                    fill="none"
+                  />
+                )}
                 <path 
                   d={d}
                   stroke={isSel ? "#fff" : "url(#signalGrad)"} 
                   strokeWidth={isSel ? "5" : "2"} 
                   strokeDasharray={isFM ? "2,2" : "10,5"} 
-                  className="opacity-60 transition-all hover:opacity-100"
+                  className={`transition-all ${isHov ? 'opacity-100' : 'opacity-60'}`}
                   fill="none"
                 />
                 <circle r="3" fill="#fff" filter="blur(1px)">

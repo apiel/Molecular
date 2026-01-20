@@ -9,7 +9,9 @@ export type FxType =
   | 'reverb' 
   | 'distortion' 
   | 'phaser' 
-  | 'tremolo';
+  | 'tremolo'
+  | 'bitcrusher'
+  | 'chorus';
 
 export interface Position {
   x: number;

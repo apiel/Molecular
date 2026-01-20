@@ -116,6 +116,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             xPercent: (x / w) * 100,
             yPercent: ((h - y) / h) * 100
           };
+        case 'bitcrusher':
+          return {
+            x: 'X-Unused',
+            xVal: '---',
+            y: 'Bit Depth',
+            yVal: (Math.max(1, (h - y) / h * 16)).toFixed(1),
+            xPercent: 0,
+            yPercent: ((h - y) / h) * 100
+          };
+        case 'chorus':
+          return {
+            x: 'Mod Rate',
+            xVal: `${((x / w) * 5).toFixed(2)} Hz`,
+            y: 'Intensity',
+            yVal: ((h - y) / h * 100).toFixed(1) + '%',
+            xPercent: (x / w) * 100,
+            yPercent: ((h - y) / h) * 100
+          };
         case 'reverb':
             return {
                 x: 'Position X',
@@ -133,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const map = getMappingInfo();
 
   return (
-    <div className="w-80 glass-panel h-screen p-8 flex flex-col gap-6 border-l border-white/5 animate-in slide-in-from-right duration-500 overflow-y-auto z-30">
+    <div className="w-80 glass-panel h-screen p-8 flex flex-col gap-6 border-l border-white/5 animate-in slide-in-from-right duration-500 overflow-y-auto z-30 text-white">
       <header className="border-b border-white/10 pb-4">
         <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{selectedNode.type}</h2>
         <span className="text-[10px] text-white/30 font-mono block mt-2 tracking-widest">{selectedNode.id.slice(0, 12)}</span>
@@ -175,7 +193,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <option value="filter-bp" className="bg-[#111] text-white py-2">Band-Pass Filter</option>
                     <option value="delay" className="bg-[#111] text-white py-2">Echo Delay</option>
                     <option value="distortion" className="bg-[#111] text-white py-2">Hard Distortion</option>
+                    <option value="bitcrusher" className="bg-[#111] text-white py-2">Bitcrusher</option>
                     <option value="phaser" className="bg-[#111] text-white py-2">Liquid Phaser</option>
+                    <option value="chorus" className="bg-[#111] text-white py-2">Deep Chorus</option>
                     <option value="tremolo" className="bg-[#111] text-white py-2">Wave Tremolo</option>
                     <option value="reverb" className="bg-[#111] text-white py-2">Space Reverb</option>
                 </>
