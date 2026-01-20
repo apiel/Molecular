@@ -63,6 +63,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const y = selectedNode.pos.y;
 
     if (isOsc) {
+      if (selectedNode.subType === 'noise') {
+        return { 
+          x: 'Density', 
+          xVal: 'Wideband', 
+          y: 'Unused', 
+          yVal: 'N/A',
+          xPercent: 100,
+          yPercent: 0
+        };
+      }
       return { 
         x: 'Frequency', 
         xVal: `${selectedNode.frequency.toFixed(3)} Hz`, 
@@ -164,17 +174,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <section className="space-y-6 flex-1">
         <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Status</span>
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Audio</span>
           <div className="flex gap-4">
-              {isOsc && (
-                <button 
+              <button 
                 onClick={() => onUpdate(selectedNode.id, { isAudible: !selectedNode.isAudible })}
                 className={`w-12 h-6 rounded-full transition-all relative ${selectedNode.isAudible ? 'shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'opacity-40'}`}
                 style={{ background: selectedNode.isAudible ? theme.colors.accent : '#333' }}
-                >
-                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${selectedNode.isAudible ? 'left-6.5' : 'left-0.5'}`} />
-                </button>
-              )}
+              >
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${selectedNode.isAudible ? 'left-[26px]' : 'left-0.5'}`} />
+              </button>
           </div>
         </div>
 
@@ -208,7 +216,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="relative">
             <select 
                 className="w-full bg-black border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
-                // Fix: Replacing invalid CSS property 'ringColor' with standard 'borderColor'
                 style={{ borderColor: theme.colors.accent }}
                 value={selectedNode.subType}
                 onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
@@ -219,6 +226,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <option value="square">Square Wave</option>
                     <option value="sawtooth">Sawtooth Wave</option>
                     <option value="triangle">Triangle Wave</option>
+                    <option value="noise">White Noise</option>
+                    <option value="sample-hold">Sample & Hold</option>
                 </>
                 ) : (
                 <>
@@ -262,7 +271,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="space-y-3">
-          <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Bubble Density</label>
+          <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">AMPLITUDE</label>
           <input 
             type="range" min="40" max="400" value={selectedNode.size}
             onChange={(e) => onUpdate(selectedNode.id, { size: parseInt(e.target.value) })}
@@ -281,7 +290,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onDelete(selectedNode.id)}
                 className="w-full py-4 bg-red-600/20 text-red-500 border border-red-500/50 hover:bg-red-600/40 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg"
             >
-                Deconstruct Bubble
+                DELETE MOLECULE
             </button>
         </div>
       </section>

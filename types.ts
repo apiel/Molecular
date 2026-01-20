@@ -1,6 +1,5 @@
-
 export type NodeType = 'OSC' | 'FX';
-export type OscType = 'sine' | 'square' | 'sawtooth' | 'triangle';
+export type OscType = 'sine' | 'square' | 'sawtooth' | 'triangle' | 'noise' | 'sample-hold';
 export type FxType = 
   | 'filter-lp' 
   | 'filter-hp' 

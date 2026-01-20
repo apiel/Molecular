@@ -97,6 +97,45 @@ const xToFreq = (x: number, width: number) => {
   }
 };
 
+const freqToX = (freq: number, width: number) => {
+  const oneThird = width / 3;
+  if (freq <= MID_FREQ) {
+    return (freq / MID_FREQ) * oneThird;
+  } else {
+    const t = (freq - MID_FREQ) / (MAX_FREQ - MID_FREQ);
+    return oneThird + t * (2 * oneThird);
+  }
+};
+
+const getDefaultNodes = (width: number, height: number): SynthNode[] => {
+  const id1 = uuidv4();
+  const id2 = uuidv4();
+  return [
+    {
+      id: id1,
+      type: 'OSC',
+      subType: 'sine',
+      pos: { x: freqToX(70, width), y: height / 2 - 50 },
+      size: 140,
+      frequency: 70,
+      modulators: [],
+      color: THEMES[0].colors.oscStart,
+      isAudible: true
+    },
+    {
+      id: id2,
+      type: 'OSC',
+      subType: 'sine',
+      pos: { x: freqToX(7, width), y: height / 2 + 100 },
+      size: 100,
+      frequency: 7,
+      modulators: [],
+      color: THEMES[0].colors.oscStart,
+      isAudible: false
+    }
+  ];
+};
+
 const App: React.FC = () => {
   const [nodes, setNodes] = useState<SynthNode[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -137,12 +176,26 @@ const App: React.FC = () => {
   const [isStarted, setIsStarted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); 
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      const w = window.innerWidth - 320;
+      const h = window.innerHeight;
+      const defaults = getDefaultNodes(w, h);
+      setNodes(defaults);
+      setConnections([{
+        id: uuidv4(),
+        fromId: defaults[1].id,
+        toId: defaults[0].id
+      }]);
+    }
+  }, []);
 
   useEffect(() => {
     const state = {
@@ -188,6 +241,7 @@ const App: React.FC = () => {
         audioEngine.createOscillator(node.id, node.subType as any, node.frequency, node.size / 300, node.isAudible);
       } else {
         audioEngine.createEffect(node.id, node.subType as any);
+        audioEngine.updateAudible(node.id, node.isAudible);
       }
     });
 
@@ -202,35 +256,15 @@ const App: React.FC = () => {
     });
   }, [applyFxParams]);
 
-  const startAudio = () => {
+  const startAudio = useCallback(() => {
+    if (isStarted) return;
     audioEngine.init();
     setIsStarted(true);
-
-    if (nodes.length > 0) {
-      rebuildAudioEngine(nodes, connections);
-    } else {
-      const id = uuidv4();
-      const x = 400;
-      const freq = xToFreq(x, window.innerWidth - 320);
-      const first: SynthNode = { 
-        id, 
-        type: 'OSC', 
-        subType: 'sine', 
-        pos: { x: 400, y: 300 }, 
-        size: 120, 
-        frequency: freq, 
-        modulators: [], 
-        color: currentTheme.colors.oscStart, 
-        isAudible: true 
-      };
-      setNodes([first]);
-      audioEngine.createOscillator(id, first.subType as any, first.frequency, first.size / 300, true);
-      setSelectedId(id);
-    }
-  };
+    rebuildAudioEngine(nodes, connections);
+  }, [isStarted, nodes, connections, rebuildAudioEngine]);
 
   const addNode = (type: NodeType) => {
-    if (!isStarted) { startAudio(); return; }
+    if (!isStarted) startAudio();
     const id = uuidv4();
     const w = window.innerWidth - 320;
     const h = window.innerHeight;
@@ -246,7 +280,7 @@ const App: React.FC = () => {
       frequency: freq,
       modulators: [],
       color: type === 'OSC' ? currentTheme.colors.oscStart : currentTheme.colors.fxStart,
-      isAudible: type === 'OSC'
+      isAudible: true
     };
     
     setNodes(prev => [...prev, newNode]);
@@ -254,24 +288,27 @@ const App: React.FC = () => {
         audioEngine.createOscillator(id, newNode.subType as any, newNode.frequency, newNode.size / 300, true);
     } else {
         audioEngine.createEffect(id, newNode.subType as any);
+        audioEngine.updateAudible(id, true);
     }
     setSelectedId(id);
   };
 
-  const toggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    audioEngine.setMasterMute(nextMuted);
+  const toggleTransport = () => {
+    if (!isStarted) startAudio();
+    const nextPlaying = !isPlaying;
+    setIsPlaying(nextPlaying);
+    audioEngine.setMasterMute(!nextPlaying);
   };
 
   const resetAll = () => {
-    if (!confirm('This will deconstruct the current session. Proceed?')) return;
+    if (!confirm('This will wipe all molecules and connections. Proceed?')) return;
     nodes.forEach(n => audioEngine.removeNode(n.id));
     setNodes([]);
     setConnections([]);
     setSelectedId(null);
     setSelectedConnectionId(null);
     localStorage.removeItem(STORAGE_KEY);
+    setTimeout(() => window.location.reload(), 10);
   };
 
   const handleExport = () => {
@@ -304,7 +341,6 @@ const App: React.FC = () => {
         const parsed = JSON.parse(event.target?.result as string);
         if (!parsed.nodes || !parsed.connections) throw new Error('Invalid format');
 
-        // Cleanup existing audio
         nodes.forEach(n => audioEngine.removeNode(n.id));
 
         setNodes(parsed.nodes);
@@ -312,7 +348,6 @@ const App: React.FC = () => {
         const theme = THEMES.find(t => t.id === parsed.themeId) || THEMES[0];
         setCurrentTheme(theme);
         
-        // If engine is already running, rebuild it immediately
         if (isStarted) {
           rebuildAudioEngine(parsed.nodes, parsed.connections);
         }
@@ -396,6 +431,7 @@ const App: React.FC = () => {
   }, [selectedId, selectedConnectionId, deleteNode, deleteConnection]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent, id: string) => {
+    if (!isStarted) startAudio();
     setSelectedConnectionId(null);
     if (isConnecting && selectedId && selectedId !== id) {
         audioEngine.connectNodes(selectedId, id);
@@ -419,7 +455,7 @@ const App: React.FC = () => {
       }
       return prev;
     });
-  }, [isConnecting, isBinding, selectedId]);
+  }, [isConnecting, isBinding, selectedId, isStarted, startAudio]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!dragStateRef.current) return;
@@ -470,7 +506,13 @@ const App: React.FC = () => {
   }), [currentTheme]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden" style={themeStyle} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+    <div 
+      className="flex h-screen w-screen overflow-hidden" 
+      style={themeStyle} 
+      onMouseMove={handleMouseMove} 
+      onMouseUp={handleMouseUp} 
+      onMouseDown={() => { if(!isStarted) startAudio(); }}
+    >
       <style>{`
         body { font-family: ${currentTheme.colors.fontFamily}; }
         .glass-panel { background: ${currentTheme.colors.sidebarBg}; }
@@ -490,7 +532,6 @@ const App: React.FC = () => {
       />
 
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
-        {/* Signal Lines / Flux connections */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
             <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -530,7 +571,7 @@ const App: React.FC = () => {
                   stroke={isSel ? currentTheme.colors.accent : "url(#signalGrad)"} 
                   strokeWidth={isSel ? "5" : "2"} 
                   strokeDasharray={isFM ? "2,2" : "10,5"} 
-                  className={`transition-all ${isHov ? 'opacity-100' : 'opacity-60'}`} 
+                  className={`transition-all ${hoveredConnectionId === conn.id ? 'opacity-100' : 'opacity-60'}`} 
                   fill="none" 
                 />
                 <circle r="3" fill="#fff" filter="blur(1px)">
@@ -557,12 +598,29 @@ const App: React.FC = () => {
           );
         })}
 
-        <div className="absolute top-8 left-8 flex gap-4 z-20">
-            <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Oscillator</button>
-            <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Effect</button>
-            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
-            <button onClick={toggleMute} style={{ background: isMuted ? 'rgba(220, 38, 38, 0.4)' : currentTheme.colors.buttonBg }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">
-                {isMuted ? 'Unmute' : 'Mute All'}
+        <div className="absolute top-8 left-8 flex gap-4 z-20 items-center">
+            <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md hover:bg-white/10">Oscillator</button>
+            <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md hover:bg-white/10">Effect</button>
+            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md hover:opacity-80">{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
+            
+            <button 
+                onClick={toggleTransport} 
+                style={{ 
+                    background: isPlaying ? 'rgba(16, 185, 129, 0.2)' : '#dc2626'
+                }} 
+                className={`px-6 py-2.5 rounded-full font-black tracking-[0.2em] text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md flex items-center justify-center gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10' : 'text-white border-white/40 hover:scale-105 active:scale-95'}`}
+            >
+                {isPlaying ? (
+                    <>
+                        <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
+                        <span>Stop</span>
+                    </>
+                ) : (
+                    <>
+                        <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                        <span>Play</span>
+                    </>
+                )}
             </button>
             
             <div className="flex gap-2 ml-4">
@@ -578,7 +636,6 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* Theme Selector UI */}
         <div className="absolute top-8 right-8 z-20 flex flex-col items-end gap-2">
             <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 px-2">Atmosphere</label>
             <div className="relative">
@@ -596,7 +653,6 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* frequency zones markers */}
         <div className="absolute inset-y-0 left-0 w-1/3 border-r border-white/5 pointer-events-none z-10 flex flex-col justify-end p-8">
           <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr]">
             Granular Depth (0-20Hz)
@@ -606,20 +662,6 @@ const App: React.FC = () => {
         {(isConnecting || isBinding) && (
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-2xl px-12 py-4 rounded-full border border-white/20 text-[11px] font-black uppercase tracking-[0.3em] animate-pulse z-50 shadow-2xl">
                 {isConnecting ? 'Link Signal Destination (Esc to cancel)' : 'Bind Mass Parent (Esc to cancel)'}
-            </div>
-        )}
-
-        {!isStarted && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-3xl">
-                <div className="flex flex-col items-center gap-12 text-center px-4">
-                  <button onClick={startAudio} className="px-24 py-10 border border-white/20 text-5xl font-black tracking-[0.5em] hover:bg-white hover:text-black transition-all duration-700 rounded-full uppercase shadow-[0_0_150px_rgba(255,255,255,0.1)] bg-white/5 group">
-                    <span className="group-hover:scale-110 block transition-transform">{nodes.length > 0 ? 'Resume' : 'Engage'}</span>
-                  </button>
-                  <p className="text-white/20 uppercase tracking-[0.4em] text-[10px] font-bold">Molecular Synthesis Engine</p>
-                  {nodes.length > 0 && (
-                     <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="text-[9px] text-white/10 uppercase tracking-widest hover:text-white/40 transition-colors">Wipe session and start fresh</button>
-                  )}
-                </div>
             </div>
         )}
       </div>
