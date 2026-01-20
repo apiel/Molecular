@@ -99,7 +99,6 @@ const xToFreq = (x: number, width: number) => {
 };
 
 const App: React.FC = () => {
-  // Load initial state from local storage
   const [nodes, setNodes] = useState<SynthNode[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -144,8 +143,8 @@ const App: React.FC = () => {
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-save effect
   useEffect(() => {
     const state = {
       nodes,
@@ -184,33 +183,33 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const rebuildAudioEngine = useCallback((nodesToBuild: SynthNode[], connsToBuild: Connection[]) => {
+    nodesToBuild.forEach(node => {
+      if (node.type === 'OSC') {
+        audioEngine.createOscillator(node.id, node.subType as any, node.frequency, node.size / 300, node.isAudible);
+      } else {
+        audioEngine.createEffect(node.id, node.subType as any);
+      }
+    });
+
+    const w = window.innerWidth - 320;
+    const h = window.innerHeight;
+    nodesToBuild.forEach(node => {
+      if (node.type === 'FX') applyFxParams(node, w, h);
+    });
+
+    connsToBuild.forEach(conn => {
+      audioEngine.connectNodes(conn.fromId, conn.toId);
+    });
+  }, [applyFxParams]);
+
   const startAudio = () => {
     audioEngine.init();
     setIsStarted(true);
 
     if (nodes.length > 0) {
-      // Restore existing state
-      nodes.forEach(node => {
-        if (node.type === 'OSC') {
-          audioEngine.createOscillator(node.id, node.subType as any, node.frequency, node.size / 300, node.isAudible);
-        } else {
-          audioEngine.createEffect(node.id, node.subType as any);
-        }
-      });
-
-      // Apply initial FX params
-      const w = window.innerWidth - 320;
-      const h = window.innerHeight;
-      nodes.forEach(node => {
-        if (node.type === 'FX') applyFxParams(node, w, h);
-      });
-
-      // Re-connect links
-      connections.forEach(conn => {
-        audioEngine.connectNodes(conn.fromId, conn.toId);
-      });
+      rebuildAudioEngine(nodes, connections);
     } else {
-      // Start with a default oscillator if empty
       const id = uuidv4();
       const x = 400;
       const freq = xToFreq(x, window.innerWidth - 320);
@@ -274,6 +273,60 @@ const App: React.FC = () => {
     setSelectedId(null);
     setSelectedConnectionId(null);
     localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const handleExport = () => {
+    const state = {
+      nodes,
+      connections,
+      themeId: currentTheme.id,
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `drone-patch-${new Date().getTime()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (!parsed.nodes || !parsed.connections) throw new Error('Invalid format');
+
+        // Cleanup existing audio
+        nodes.forEach(n => audioEngine.removeNode(n.id));
+
+        setNodes(parsed.nodes);
+        setConnections(parsed.connections);
+        const theme = THEMES.find(t => t.id === parsed.themeId) || THEMES[0];
+        setCurrentTheme(theme);
+        
+        // If engine is already running, rebuild it immediately
+        if (isStarted) {
+          rebuildAudioEngine(parsed.nodes, parsed.connections);
+        }
+        
+        setSelectedId(null);
+        setSelectedConnectionId(null);
+      } catch (err) {
+        alert('Failed to import patch: Invalid file format');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be imported again if needed
+    e.target.value = '';
   };
 
   const updateNode = useCallback((id: string, updates: Partial<SynthNode>) => {
@@ -430,6 +483,14 @@ const App: React.FC = () => {
       
       <div className="fixed inset-0 pointer-events-none" style={{ background: currentTheme.colors.bgGlow, zIndex: -1 }} />
       
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        className="hidden" 
+        accept=".json"
+      />
+
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
         {/* Signal Lines / Flux connections */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
@@ -505,9 +566,18 @@ const App: React.FC = () => {
             <button onClick={toggleMute} style={{ background: isMuted ? 'rgba(220, 38, 38, 0.4)' : currentTheme.colors.buttonBg }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">
                 {isMuted ? 'Unmute' : 'Mute All'}
             </button>
-            <button onClick={resetAll} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/30 hover:text-white/80">
-                Clear
-            </button>
+            
+            <div className="flex gap-2 ml-4">
+              <button onClick={handleExport} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/40 hover:text-white/80">
+                  Export
+              </button>
+              <button onClick={handleImportClick} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/40 hover:text-white/80">
+                  Import
+              </button>
+              <button onClick={resetAll} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/30 hover:text-white/80">
+                  Clear
+              </button>
+            </div>
         </div>
 
         {/* Theme Selector UI */}
