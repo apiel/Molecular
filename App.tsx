@@ -6,6 +6,8 @@ import { Bubble } from './components/Bubble';
 import { Sidebar } from './components/Sidebar';
 import { audioEngine } from './services/audioEngine';
 
+const STORAGE_KEY = 'bubble_drone_synth_v1';
+
 const MIN_FREQ = 0;
 const MID_FREQ = 20;
 const MAX_FREQ = 2000;
@@ -97,8 +99,41 @@ const xToFreq = (x: number, width: number) => {
 };
 
 const App: React.FC = () => {
-  const [nodes, setNodes] = useState<SynthNode[]>([]);
-  const [connections, setConnections] = useState<Connection[]>([]);
+  // Load initial state from local storage
+  const [nodes, setNodes] = useState<SynthNode[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.nodes || [];
+      } catch (e) { return []; }
+    }
+    return [];
+  });
+
+  const [connections, setConnections] = useState<Connection[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.connections || [];
+      } catch (e) { return []; }
+    }
+    return [];
+  });
+
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const theme = THEMES.find(t => t.id === parsed.themeId);
+        return theme || THEMES[0];
+      } catch (e) { return THEMES[0]; }
+    }
+    return THEMES[0];
+  });
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [isStarted, setIsStarted] = useState(false);
@@ -106,31 +141,94 @@ const App: React.FC = () => {
   const [isBinding, setIsBinding] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
-  const [currentTheme, setCurrentTheme] = useState<Theme>(THEMES[0]);
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Auto-save effect
+  useEffect(() => {
+    const state = {
+      nodes,
+      connections,
+      themeId: currentTheme.id
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [nodes, connections, currentTheme]);
+
+  const applyFxParams = useCallback((node: SynthNode, w: number, h: number) => {
+    const id = node.id;
+    const x = node.pos.x;
+    const y = node.pos.y;
+    if (node.subType.startsWith('filter')) {
+        audioEngine.updateParam(id, 'cutoff', xToFreq(x, w) * 5);
+        audioEngine.updateParam(id, 'resonance', (h - y) / 40);
+    } else if (node.subType === 'delay') {
+        audioEngine.updateParam(id, 'time', x / w * 2);
+        audioEngine.updateParam(id, 'feedback', (h - y) / h);
+    } else if (node.subType === 'distortion') {
+        audioEngine.updateParam(id, 'amount', (x / w) * 5);
+        audioEngine.updateParam(id, 'distortionCurve', (h - y) / 5);
+    } else if (node.subType === 'reverb') {
+        audioEngine.updateParam(id, 'diffusion', (h - y) / h);
+    } else if (node.subType === 'phaser') {
+        audioEngine.updateParam(id, 'speed', (x / w) * 10);
+        audioEngine.updateParam(id, 'depth', (h - y) / h * 2000);
+    } else if (node.subType === 'tremolo') {
+        audioEngine.updateParam(id, 'rate', (x / w) * 20);
+        audioEngine.updateParam(id, 'intensity', (h - y) / h);
+    } else if (node.subType === 'bitcrusher') {
+        audioEngine.updateParam(id, 'bitCurve', Math.max(1, (h - y) / h * 16));
+    } else if (node.subType === 'chorus') {
+        audioEngine.updateParam(id, 'speed', (x / w) * 5);
+        audioEngine.updateParam(id, 'intensity', (h - y) / h * 0.01);
+    }
+  }, []);
+
   const startAudio = () => {
     audioEngine.init();
     setIsStarted(true);
-    const id = uuidv4();
-    const x = 400;
-    const freq = xToFreq(x, window.innerWidth - 320);
-    const first: SynthNode = { 
-      id, 
-      type: 'OSC', 
-      subType: 'sine', 
-      pos: { x: 400, y: 300 }, 
-      size: 120, 
-      frequency: freq, 
-      modulators: [], 
-      color: currentTheme.colors.oscStart, 
-      isAudible: true 
-    };
-    setNodes([first]);
-    audioEngine.createOscillator(id, first.subType as any, first.frequency, first.size / 300, true);
-    setSelectedId(id);
+
+    if (nodes.length > 0) {
+      // Restore existing state
+      nodes.forEach(node => {
+        if (node.type === 'OSC') {
+          audioEngine.createOscillator(node.id, node.subType as any, node.frequency, node.size / 300, node.isAudible);
+        } else {
+          audioEngine.createEffect(node.id, node.subType as any);
+        }
+      });
+
+      // Apply initial FX params
+      const w = window.innerWidth - 320;
+      const h = window.innerHeight;
+      nodes.forEach(node => {
+        if (node.type === 'FX') applyFxParams(node, w, h);
+      });
+
+      // Re-connect links
+      connections.forEach(conn => {
+        audioEngine.connectNodes(conn.fromId, conn.toId);
+      });
+    } else {
+      // Start with a default oscillator if empty
+      const id = uuidv4();
+      const x = 400;
+      const freq = xToFreq(x, window.innerWidth - 320);
+      const first: SynthNode = { 
+        id, 
+        type: 'OSC', 
+        subType: 'sine', 
+        pos: { x: 400, y: 300 }, 
+        size: 120, 
+        frequency: freq, 
+        modulators: [], 
+        color: currentTheme.colors.oscStart, 
+        isAudible: true 
+      };
+      setNodes([first]);
+      audioEngine.createOscillator(id, first.subType as any, first.frequency, first.size / 300, true);
+      setSelectedId(id);
+    }
   };
 
   const addNode = (type: NodeType) => {
@@ -168,6 +266,16 @@ const App: React.FC = () => {
     audioEngine.setMasterMute(nextMuted);
   };
 
+  const resetAll = () => {
+    if (!confirm('This will deconstruct the current session. Proceed?')) return;
+    nodes.forEach(n => audioEngine.removeNode(n.id));
+    setNodes([]);
+    setConnections([]);
+    setSelectedId(null);
+    setSelectedConnectionId(null);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
   const updateNode = useCallback((id: string, updates: Partial<SynthNode>) => {
     setNodes(prev => prev.map(n => {
       if (n.id === id) {
@@ -198,36 +306,7 @@ const App: React.FC = () => {
       }
       return n;
     }));
-  }, [connections]);
-
-  const applyFxParams = (node: SynthNode, w: number, h: number) => {
-    const id = node.id;
-    const x = node.pos.x;
-    const y = node.pos.y;
-    if (node.subType.startsWith('filter')) {
-        audioEngine.updateParam(id, 'cutoff', xToFreq(x, w) * 5);
-        audioEngine.updateParam(id, 'resonance', (h - y) / 40);
-    } else if (node.subType === 'delay') {
-        audioEngine.updateParam(id, 'time', x / w * 2);
-        audioEngine.updateParam(id, 'feedback', (h - y) / h);
-    } else if (node.subType === 'distortion') {
-        audioEngine.updateParam(id, 'amount', (x / w) * 5);
-        audioEngine.updateParam(id, 'distortionCurve', (h - y) / 5);
-    } else if (node.subType === 'reverb') {
-        audioEngine.updateParam(id, 'diffusion', (h - y) / h);
-    } else if (node.subType === 'phaser') {
-        audioEngine.updateParam(id, 'speed', (x / w) * 10);
-        audioEngine.updateParam(id, 'depth', (h - y) / h * 2000);
-    } else if (node.subType === 'tremolo') {
-        audioEngine.updateParam(id, 'rate', (x / w) * 20);
-        audioEngine.updateParam(id, 'intensity', (h - y) / h);
-    } else if (node.subType === 'bitcrusher') {
-        audioEngine.updateParam(id, 'bitCurve', Math.max(1, (h - y) / h * 16));
-    } else if (node.subType === 'chorus') {
-        audioEngine.updateParam(id, 'speed', (x / w) * 5);
-        audioEngine.updateParam(id, 'intensity', (h - y) / h * 0.01);
-    }
-  };
+  }, [connections, applyFxParams]);
 
   const deleteNode = useCallback((id: string) => {
     const connectionsToRemove = connections.filter(c => c.fromId === id || c.toId === id);
@@ -327,7 +406,7 @@ const App: React.FC = () => {
             return updatedNode;
         });
     });
-  }, []);
+  }, [applyFxParams]);
 
   const handleMouseUp = useCallback(() => {
     dragStateRef.current = null;
@@ -426,6 +505,9 @@ const App: React.FC = () => {
             <button onClick={toggleMute} style={{ background: isMuted ? 'rgba(220, 38, 38, 0.4)' : currentTheme.colors.buttonBg }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">
                 {isMuted ? 'Unmute' : 'Mute All'}
             </button>
+            <button onClick={resetAll} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/30 hover:text-white/80">
+                Clear
+            </button>
         </div>
 
         {/* Theme Selector UI */}
@@ -461,11 +543,14 @@ const App: React.FC = () => {
 
         {!isStarted && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-3xl">
-                <div className="flex flex-col items-center gap-12">
+                <div className="flex flex-col items-center gap-12 text-center px-4">
                   <button onClick={startAudio} className="px-24 py-10 border border-white/20 text-5xl font-black tracking-[0.5em] hover:bg-white hover:text-black transition-all duration-700 rounded-full uppercase shadow-[0_0_150px_rgba(255,255,255,0.1)] bg-white/5 group">
-                    <span className="group-hover:scale-110 block transition-transform">Engage</span>
+                    <span className="group-hover:scale-110 block transition-transform">{nodes.length > 0 ? 'Resume' : 'Engage'}</span>
                   </button>
                   <p className="text-white/20 uppercase tracking-[0.4em] text-[10px] font-bold">Multi-voice drone synthesis engine</p>
+                  {nodes.length > 0 && (
+                     <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="text-[9px] text-white/10 uppercase tracking-widest hover:text-white/40 transition-colors">Wipe session and start fresh</button>
+                  )}
                 </div>
             </div>
         )}
