@@ -271,7 +271,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="space-y-3">
-          <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Bubble Density</label>
+          <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">AMPLITUDE</label>
           <input 
             type="range" min="40" max="400" value={selectedNode.size}
             onChange={(e) => onUpdate(selectedNode.id, { size: parseInt(e.target.value) })}
