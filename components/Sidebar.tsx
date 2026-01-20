@@ -13,6 +13,10 @@ interface SidebarProps {
   onDeleteConnection: (id: string) => void;
 }
 
+const COLOR_PRESETS = [
+  '#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6', '#ffffff'
+];
+
 export const Sidebar: React.FC<SidebarProps> = ({ 
     selectedNode, 
     theme,
@@ -160,18 +164,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </header>
 
       <section className="space-y-6 flex-1">
-        {isOsc && (
-          <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-            <span className="text-[10px] font-black uppercase tracking-widest">Audible</span>
-            <button 
-              onClick={() => onUpdate(selectedNode.id, { isAudible: !selectedNode.isAudible })}
-              className={`w-14 h-7 rounded-full transition-all relative ${selectedNode.isAudible ? 'bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.5)]' : 'bg-gray-800'}`}
-              style={{ background: selectedNode.isAudible ? theme.colors.accent : '#333' }}
-            >
-              <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all shadow-md ${selectedNode.isAudible ? 'left-8' : 'left-1'}`} />
-            </button>
+        <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Status</span>
+          <div className="flex gap-4">
+              {isOsc && (
+                <button 
+                onClick={() => onUpdate(selectedNode.id, { isAudible: !selectedNode.isAudible })}
+                className={`w-12 h-6 rounded-full transition-all relative ${selectedNode.isAudible ? 'shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'opacity-40'}`}
+                style={{ background: selectedNode.isAudible ? theme.colors.accent : '#333' }}
+                >
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${selectedNode.isAudible ? 'left-6.5' : 'left-0.5'}`} />
+                </button>
+              )}
           </div>
-        )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Atmospheric Hue</label>
+          <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+              <div className="flex flex-wrap gap-2 mb-4">
+                  {COLOR_PRESETS.map(c => (
+                      <button 
+                          key={c}
+                          onClick={() => onUpdate(selectedNode.id, { color: c })}
+                          className={`w-6 h-6 rounded-full border-2 transition-all ${selectedNode.color === c ? 'border-white scale-125' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                          style={{ backgroundColor: c }}
+                      />
+                  ))}
+              </div>
+              <div className="flex items-center gap-3">
+                  <input 
+                      type="color" 
+                      value={selectedNode.color}
+                      onChange={(e) => onUpdate(selectedNode.id, { color: e.target.value })}
+                      className="w-10 h-8 bg-transparent border-none cursor-pointer"
+                  />
+                  <span className="text-[10px] font-mono opacity-50 uppercase">{selectedNode.color}</span>
+              </div>
+          </div>
+        </div>
 
         <div className="space-y-2">
           <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Profile</label>
@@ -184,23 +215,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
                 {isOsc ? (
                 <>
-                    <option value="sine" className="bg-black text-white py-2">Sine Wave</option>
-                    <option value="square" className="bg-black text-white py-2">Square Wave</option>
-                    <option value="sawtooth" className="bg-black text-white py-2">Sawtooth Wave</option>
-                    <option value="triangle" className="bg-black text-white py-2">Triangle Wave</option>
+                    <option value="sine">Sine Wave</option>
+                    <option value="square">Square Wave</option>
+                    <option value="sawtooth">Sawtooth Wave</option>
+                    <option value="triangle">Triangle Wave</option>
                 </>
                 ) : (
                 <>
-                    <option value="filter-lp" className="bg-black text-white py-2">Low-Pass Filter</option>
-                    <option value="filter-hp" className="bg-black text-white py-2">High-Pass Filter</option>
-                    <option value="filter-bp" className="bg-black text-white py-2">Band-Pass Filter</option>
-                    <option value="delay" className="bg-black text-white py-2">Echo Delay</option>
-                    <option value="distortion" className="bg-black text-white py-2">Hard Distortion</option>
-                    <option value="bitcrusher" className="bg-black text-white py-2">Bitcrusher</option>
-                    <option value="phaser" className="bg-black text-white py-2">Liquid Phaser</option>
-                    <option value="chorus" className="bg-black text-white py-2">Deep Chorus</option>
-                    <option value="tremolo" className="bg-black text-white py-2">Wave Tremolo</option>
-                    <option value="reverb" className="bg-black text-white py-2">Space Reverb</option>
+                    <option value="filter-lp">Low-Pass Filter</option>
+                    <option value="filter-hp">High-Pass Filter</option>
+                    <option value="filter-bp">Band-Pass Filter</option>
+                    <option value="delay">Echo Delay</option>
+                    <option value="distortion">Hard Distortion</option>
+                    <option value="bitcrusher">Bitcrusher</option>
+                    <option value="phaser">Liquid Phaser</option>
+                    <option value="chorus">Deep Chorus</option>
+                    <option value="tremolo">Wave Tremolo</option>
+                    <option value="reverb">Space Reverb</option>
                 </>
                 )}
             </select>
@@ -208,7 +239,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Visual Parameters */}
         <div className="space-y-4">
           <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2 shadow-inner">
             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-40">
@@ -216,7 +246,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="opacity-100 tabular-nums">{map.xVal}</span>
             </div>
             <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full transition-all duration-75 shadow-lg" style={{ width: `${map.xPercent}%`, background: theme.colors.accent }} />
+              <div className="h-full transition-all duration-75 shadow-lg" style={{ width: `${map.xPercent}%`, background: selectedNode.color || theme.colors.accent }} />
             </div>
           </div>
 

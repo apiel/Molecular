@@ -28,24 +28,24 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
   }, [isSelected]);
 
   const backgroundStyle = useMemo(() => {
-    if (node.type === 'OSC') {
-        if (!node.isAudible) return { background: '#27272a', opacity: 0.6 }; // Gray/Muted
-        return { 
-            background: `linear-gradient(135deg, ${theme.colors.oscStart} 0%, ${theme.colors.oscEnd} 100%)`
-        };
-    } else {
-        return { 
-            background: `linear-gradient(135deg, ${theme.colors.fxStart} 0%, ${theme.colors.fxEnd} 100%)`
-        };
+    if (!node.isAudible && node.type === 'OSC') {
+      return { background: '#18181b', opacity: 0.6 }; 
     }
-  }, [node.type, node.isAudible, theme]);
 
-  // Ripple speed based on frequency for OSC, or static for FX
+    // Use the node's custom color if available, otherwise fallback to theme defaults
+    const baseColor = node.color || (node.type === 'OSC' ? theme.colors.oscStart : theme.colors.fxStart);
+    
+    // Create a deep gradient from the custom color
+    return { 
+      background: `linear-gradient(135deg, ${baseColor} 0%, rgba(0,0,0,0.6) 150%)`,
+      boxShadow: `inset 0 0 20px ${baseColor}44, 0 10px 30px rgba(0,0,0,0.5)`
+    };
+  }, [node.type, node.isAudible, node.color, theme]);
+
   const rippleDuration = node.type === 'OSC' 
     ? Math.max(0.5, Math.min(4, 15 / (Math.log10(node.frequency + 1) * 5 + 1))) 
     : 3;
 
-  // Ripples show if it's an audible OSC or an FX receiving signal
   const showRipples = (node.type === 'OSC' && node.isAudible) || (node.type === 'FX' && hasIncoming);
 
   return (
@@ -69,10 +69,8 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
         onSelect(node.id);
       }}
     >
-      {/* Background depth shimmer */}
       <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/10 pointer-events-none" />
 
-      {/* Centered Ripple Animation (Water Drop Effect) */}
       {showRipples && (
         <>
           <div 
@@ -80,7 +78,8 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
             style={{ 
                 animationDuration: `${rippleDuration}s`,
                 width: node.size * 0.2,
-                height: node.size * 0.2
+                height: node.size * 0.2,
+                borderColor: `${node.color}66`
             }} 
           />
           <div 
@@ -89,23 +88,22 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
                 animationDuration: `${rippleDuration}s`,
                 animationDelay: `${rippleDuration / 2}s`,
                 width: node.size * 0.2,
-                height: node.size * 0.2
+                height: node.size * 0.2,
+                borderColor: `${node.color}44`
             }} 
           />
         </>
       )}
 
-      {/* Label Content */}
-      <div className="z-10 text-center pointer-events-none">
-        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-0.5 leading-none">
+      <div className="z-10 text-center pointer-events-none px-2">
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-0.5 leading-none">
           {node.type}
         </div>
-        <div className="text-[11px] font-black text-white uppercase tracking-tight truncate max-w-[90%] mx-auto drop-shadow-lg">
-          {node.subType}
+        <div className="text-[11px] font-black text-white uppercase tracking-tight truncate drop-shadow-lg">
+          {node.subType.replace('filter-', '')}
         </div>
       </div>
       
-      {/* State indicators */}
       {node.boundTo && (
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-sm text-[7px] px-1.5 py-0.5 rounded-full font-black text-white uppercase tracking-tighter">
           Linked

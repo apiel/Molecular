@@ -23,7 +23,7 @@ const THEMES: Theme[] = [
       connEnd: '#34d399',
       bgGlow: 'radial-gradient(circle at 30% 30%, #0a0a1a 0%, #020205 100%)',
       sidebarBg: 'rgba(10, 10, 20, 0.9)',
-      accent: '#818cf8',
+      accent: '#4f46e5',
       buttonBg: 'rgba(255, 255, 255, 0.05)',
       buttonText: '#ffffff',
       fontFamily: "'Inter', sans-serif"
@@ -41,7 +41,7 @@ const THEMES: Theme[] = [
       connEnd: '#00ffff',
       bgGlow: 'radial-gradient(circle at 50% 50%, #1a001a 0%, #000000 100%)',
       sidebarBg: 'rgba(0, 0, 0, 0.95)',
-      accent: '#00ffff',
+      accent: '#ff00ff',
       buttonBg: 'rgba(0, 255, 255, 0.1)',
       buttonText: '#00ffff',
       fontFamily: "'Courier New', monospace"
@@ -117,7 +117,17 @@ const App: React.FC = () => {
     const id = uuidv4();
     const x = 400;
     const freq = xToFreq(x, window.innerWidth - 320);
-    const first: SynthNode = { id, type: 'OSC', subType: 'sine', pos: { x: 400, y: 300 }, size: 120, frequency: freq, modulators: [], color: 'purple', isAudible: true };
+    const first: SynthNode = { 
+      id, 
+      type: 'OSC', 
+      subType: 'sine', 
+      pos: { x: 400, y: 300 }, 
+      size: 120, 
+      frequency: freq, 
+      modulators: [], 
+      color: currentTheme.colors.oscStart, 
+      isAudible: true 
+    };
     setNodes([first]);
     audioEngine.createOscillator(id, first.subType as any, first.frequency, first.size / 300, true);
     setSelectedId(id);
@@ -139,7 +149,7 @@ const App: React.FC = () => {
       size: 110,
       frequency: freq,
       modulators: [],
-      color: type === 'OSC' ? 'purple' : 'emerald',
+      color: type === 'OSC' ? currentTheme.colors.oscStart : currentTheme.colors.fxStart,
       isAudible: type === 'OSC'
     };
     
@@ -220,7 +230,6 @@ const App: React.FC = () => {
   };
 
   const deleteNode = useCallback((id: string) => {
-    // Collect connections to disconnect in engine
     const connectionsToRemove = connections.filter(c => c.fromId === id || c.toId === id);
     connectionsToRemove.forEach(c => {
       audioEngine.disconnectNodes(c.fromId, c.toId);
