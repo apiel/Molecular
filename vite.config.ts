@@ -8,7 +8,7 @@ export default defineConfig({
   // Use relative base path so it works on any GitHub Pages URL (e.g. username.github.io/repo-name/)
   base: './',
   build: {
-    outDir: 'docs',
+    outDir: 'app',
     sourcemap: true
   }
 });
