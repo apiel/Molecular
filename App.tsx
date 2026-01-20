@@ -57,7 +57,7 @@ const App: React.FC = () => {
     const newNode: SynthNode = {
       id,
       type,
-      subType: type === 'OSC' ? 'sine' : 'filter',
+      subType: type === 'OSC' ? 'sine' : 'filter-lp',
       pos: { x, y },
       size: 110,
       frequency: freq,
@@ -86,35 +86,20 @@ const App: React.FC = () => {
       if (n.id === id) {
         const updated = { ...n, ...updates };
         
-        // Handle OSC wave type change
         if (updates.subType !== undefined && updated.type === 'OSC') {
             audioEngine.updateOscType(id, updates.subType as any);
         }
 
-        // Handle FX type change (more complex as we need to reconnect chains)
         if (updates.subType !== undefined && updated.type === 'FX') {
             audioEngine.updateEffectType(id, updates.subType as any);
-            // Re-apply connections involving this node
             connections.forEach(conn => {
                 if (conn.fromId === id || conn.toId === id) {
                     audioEngine.connectNodes(conn.fromId, conn.toId);
                 }
             });
-            // Re-apply parameters based on current position
             const w = window.innerWidth - 320;
             const h = window.innerHeight;
-            if (updated.subType === 'filter') {
-                audioEngine.updateParam(id, 'cutoff', xToFreq(updated.pos.x, w) * 5);
-                audioEngine.updateParam(id, 'resonance', (h - updated.pos.y) / 40);
-            } else if (updated.subType === 'delay') {
-                audioEngine.updateParam(id, 'time', updated.pos.x / w * 2);
-                audioEngine.updateParam(id, 'feedback', (h - updated.pos.y) / h);
-            } else if (updated.subType === 'distortion') {
-                audioEngine.updateParam(id, 'amount', (updated.pos.x / w) * 5);
-                audioEngine.updateParam(id, 'distortionCurve', (h - updated.pos.y) / 5);
-            } else if (updated.subType === 'reverb') {
-                audioEngine.updateParam(id, 'diffusion', (h - updated.pos.y) / h);
-            }
+            applyFxParams(updated, w, h);
         }
 
         if (updates.isAudible !== undefined) audioEngine.updateAudible(id, updates.isAudible);
@@ -133,6 +118,31 @@ const App: React.FC = () => {
       return n;
     }));
   }, [connections]);
+
+  const applyFxParams = (node: SynthNode, w: number, h: number) => {
+    const id = node.id;
+    const x = node.pos.x;
+    const y = node.pos.y;
+    
+    if (node.subType.startsWith('filter')) {
+        audioEngine.updateParam(id, 'cutoff', xToFreq(x, w) * 5);
+        audioEngine.updateParam(id, 'resonance', (h - y) / 40);
+    } else if (node.subType === 'delay') {
+        audioEngine.updateParam(id, 'time', x / w * 2);
+        audioEngine.updateParam(id, 'feedback', (h - y) / h);
+    } else if (node.subType === 'distortion') {
+        audioEngine.updateParam(id, 'amount', (x / w) * 5);
+        audioEngine.updateParam(id, 'distortionCurve', (h - y) / 5);
+    } else if (node.subType === 'reverb') {
+        audioEngine.updateParam(id, 'diffusion', (h - y) / h);
+    } else if (node.subType === 'phaser') {
+        audioEngine.updateParam(id, 'speed', (x / w) * 10);
+        audioEngine.updateParam(id, 'depth', (h - y) / h * 2000);
+    } else if (node.subType === 'tremolo') {
+        audioEngine.updateParam(id, 'rate', (x / w) * 20);
+        audioEngine.updateParam(id, 'intensity', (h - y) / h);
+    }
+  };
 
   const deleteNode = useCallback((id: string) => {
     setNodes(prev => prev.filter(n => n.id !== id));
@@ -158,6 +168,10 @@ const App: React.FC = () => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedId) deleteNode(selectedId);
         if (selectedConnectionId) deleteConnection(selectedConnectionId);
+      }
+      if (e.key === 'Escape') {
+        setIsConnecting(false);
+        setIsBinding(false);
       }
     };
     window.addEventListener('keydown', handleKey);
@@ -206,7 +220,6 @@ const App: React.FC = () => {
         let newX = e.clientX - offsetX;
         let newY = e.clientY - offsetY;
 
-        // Boundary clamping
         newX = Math.max(halfSize, Math.min(w - 320 - halfSize, newX));
         newY = Math.max(halfSize, Math.min(h - halfSize, newY));
 
@@ -227,26 +240,15 @@ const App: React.FC = () => {
             updatedPos.x = Math.max(nHalfSize, Math.min(w - 320 - nHalfSize, updatedPos.x));
             updatedPos.y = Math.max(nHalfSize, Math.min(h - nHalfSize, updatedPos.y));
 
+            const updatedNode = { ...n, pos: updatedPos };
             if (n.type === 'OSC') {
                 const freq = xToFreq(updatedPos.x, w - 320);
                 audioEngine.updateParam(n.id, 'frequency', freq);
-                return { ...n, pos: updatedPos, frequency: freq };
+                updatedNode.frequency = freq;
             } else {
-                const effectiveW = w - 320;
-                if (n.subType === 'filter') {
-                    audioEngine.updateParam(n.id, 'cutoff', xToFreq(updatedPos.x, effectiveW) * 5);
-                    audioEngine.updateParam(n.id, 'resonance', (h - updatedPos.y) / 40);
-                } else if (n.subType === 'delay') {
-                    audioEngine.updateParam(n.id, 'time', updatedPos.x / effectiveW * 2);
-                    audioEngine.updateParam(n.id, 'feedback', (h - updatedPos.y) / h);
-                } else if (n.subType === 'distortion') {
-                    audioEngine.updateParam(n.id, 'amount', (updatedPos.x / effectiveW) * 5);
-                    audioEngine.updateParam(n.id, 'distortionCurve', (h - updatedPos.y) / 5);
-                } else if (n.subType === 'reverb') {
-                    audioEngine.updateParam(n.id, 'diffusion', (h - updatedPos.y) / h);
-                }
-                return { ...n, pos: updatedPos };
+                applyFxParams(updatedNode, w - 320, h);
             }
+            return updatedNode;
         });
     });
   }, []);
@@ -277,6 +279,14 @@ const App: React.FC = () => {
             
             return (
               <g key={conn.id} className="pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedConnectionId(conn.id); setSelectedId(null); }}>
+                {/* Invisible hit area for easier selection */}
+                <path 
+                  d={d}
+                  stroke="transparent" 
+                  strokeWidth="20" 
+                  className="cursor-pointer"
+                  fill="none"
+                />
                 <path 
                   d={d}
                   stroke={isSel ? "#fff" : "url(#signalGrad)"} 
@@ -326,7 +336,7 @@ const App: React.FC = () => {
 
         {(isConnecting || isBinding) && (
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-2xl px-12 py-4 rounded-full border border-white/20 text-[11px] font-black uppercase tracking-[0.3em] animate-pulse z-50">
-                {isConnecting ? 'Link Signal Destination' : 'Bind Mass Parent'}
+                {isConnecting ? 'Link Signal Destination (Esc to cancel)' : 'Bind Mass Parent (Esc to cancel)'}
             </div>
         )}
 

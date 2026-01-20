@@ -1,7 +1,15 @@
 
 export type NodeType = 'OSC' | 'FX';
 export type OscType = 'sine' | 'square' | 'sawtooth' | 'triangle';
-export type FxType = 'filter' | 'delay' | 'reverb' | 'distortion';
+export type FxType = 
+  | 'filter-lp' 
+  | 'filter-hp' 
+  | 'filter-bp' 
+  | 'delay' 
+  | 'reverb' 
+  | 'distortion' 
+  | 'phaser' 
+  | 'tremolo';
 
 export interface Position {
   x: number;

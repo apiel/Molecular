@@ -69,7 +69,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     switch (selectedNode.subType) {
-        case 'filter': 
+        case 'filter-lp': 
+        case 'filter-hp':
+        case 'filter-bp':
           return { 
             x: 'Cutoff', 
             xVal: `${(Math.max(0.1, x / w) * 5000).toFixed(0)} Hz`, 
@@ -93,6 +95,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             xVal: ((x / w) * 5).toFixed(2), 
             y: 'Shape (Curve)', 
             yVal: ((h - y) / 5).toFixed(0),
+            xPercent: (x / w) * 100,
+            yPercent: ((h - y) / h) * 100
+          };
+        case 'phaser':
+          return {
+            x: 'Speed',
+            xVal: `${((x / w) * 10).toFixed(2)} Hz`,
+            y: 'Depth',
+            yVal: ((h - y) / h * 2000).toFixed(0),
+            xPercent: (x / w) * 100,
+            yPercent: ((h - y) / h) * 100
+          };
+        case 'tremolo':
+          return {
+            x: 'Rate',
+            xVal: `${((x / w) * 20).toFixed(2)} Hz`,
+            y: 'Intensity',
+            yVal: ((h - y) / h).toFixed(2),
             xPercent: (x / w) * 100,
             yPercent: ((h - y) / h) * 100
           };
@@ -150,9 +170,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </>
                 ) : (
                 <>
-                    <option value="filter" className="bg-[#111] text-white py-2">L-Pass Filter</option>
+                    <option value="filter-lp" className="bg-[#111] text-white py-2">Low-Pass Filter</option>
+                    <option value="filter-hp" className="bg-[#111] text-white py-2">High-Pass Filter</option>
+                    <option value="filter-bp" className="bg-[#111] text-white py-2">Band-Pass Filter</option>
                     <option value="delay" className="bg-[#111] text-white py-2">Echo Delay</option>
                     <option value="distortion" className="bg-[#111] text-white py-2">Hard Distortion</option>
+                    <option value="phaser" className="bg-[#111] text-white py-2">Liquid Phaser</option>
+                    <option value="tremolo" className="bg-[#111] text-white py-2">Wave Tremolo</option>
                     <option value="reverb" className="bg-[#111] text-white py-2">Space Reverb</option>
                 </>
                 )}
