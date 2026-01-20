@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { SynthNode, Theme } from '../types';
 

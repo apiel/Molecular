@@ -1,7 +1,10 @@
-
 # Molecular
 
 Molecular is a high-performance, spatial multi-voice drone synthesizer. It uses interactive bubble physics to represent oscillators and effects, allowing you to sculpt complex soundscapes through physical placement and modular routing.
+
+Try it out: https://apiel.github.io/Molecular/
+
+<img src='https://github.com/apiel/Molecular/blob/main/demo.png?raw=true' width='500'>
 
 ## Key Features
 
