@@ -1,6 +1,6 @@
 
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -8,7 +8,7 @@ export default defineConfig({
   // Use relative base path so it works on any GitHub Pages URL (e.g. username.github.io/repo-name/)
   base: './',
   build: {
-    outDir: 'dist',
+    outDir: 'docs',
     sourcemap: true
   }
 });
