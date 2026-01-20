@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { SynthNode, Position, Connection, NodeType } from './types';
+import { SynthNode, Position, Connection, NodeType, Theme } from './types';
 import { Bubble } from './components/Bubble';
 import { Sidebar } from './components/Sidebar';
 import { audioEngine } from './services/audioEngine';
@@ -9,6 +9,81 @@ import { audioEngine } from './services/audioEngine';
 const MIN_FREQ = 0;
 const MID_FREQ = 20;
 const MAX_FREQ = 2000;
+
+const THEMES: Theme[] = [
+  {
+    id: 'deep-space',
+    name: 'Deep Space',
+    colors: {
+      oscStart: '#4f46e5',
+      oscEnd: '#312e81',
+      fxStart: '#10b981',
+      fxEnd: '#134e4a',
+      connStart: '#818cf8',
+      connEnd: '#34d399',
+      bgGlow: 'radial-gradient(circle at 30% 30%, #0a0a1a 0%, #020205 100%)',
+      sidebarBg: 'rgba(10, 10, 20, 0.9)',
+      accent: '#818cf8',
+      buttonBg: 'rgba(255, 255, 255, 0.05)',
+      buttonText: '#ffffff',
+      fontFamily: "'Inter', sans-serif"
+    }
+  },
+  {
+    id: 'cyberpunk',
+    name: 'Cyberpunk',
+    colors: {
+      oscStart: '#ff00ff',
+      oscEnd: '#660066',
+      fxStart: '#00ffff',
+      fxEnd: '#004444',
+      connStart: '#ff00ff',
+      connEnd: '#00ffff',
+      bgGlow: 'radial-gradient(circle at 50% 50%, #1a001a 0%, #000000 100%)',
+      sidebarBg: 'rgba(0, 0, 0, 0.95)',
+      accent: '#00ffff',
+      buttonBg: 'rgba(0, 255, 255, 0.1)',
+      buttonText: '#00ffff',
+      fontFamily: "'Courier New', monospace"
+    }
+  },
+  {
+    id: 'monochrome',
+    name: 'Monochrome',
+    colors: {
+      oscStart: '#ffffff',
+      oscEnd: '#333333',
+      fxStart: '#aaaaaa',
+      fxEnd: '#111111',
+      connStart: '#ffffff',
+      connEnd: '#555555',
+      bgGlow: 'linear-gradient(180deg, #111 0%, #000 100%)',
+      sidebarBg: 'rgba(5, 5, 5, 1)',
+      accent: '#ffffff',
+      buttonBg: 'rgba(255, 255, 255, 0.1)',
+      buttonText: '#ffffff',
+      fontFamily: "'Inter', sans-serif"
+    }
+  },
+  {
+    id: 'heatwave',
+    name: 'Heatwave',
+    colors: {
+      oscStart: '#f97316',
+      oscEnd: '#7c2d12',
+      fxStart: '#e11d48',
+      fxEnd: '#4c0519',
+      connStart: '#fb923c',
+      connEnd: '#f43f5e',
+      bgGlow: 'radial-gradient(circle at 70% 20%, #2e0505 0%, #050505 100%)',
+      sidebarBg: 'rgba(20, 5, 5, 0.9)',
+      accent: '#f97316',
+      buttonBg: 'rgba(249, 115, 22, 0.1)',
+      buttonText: '#fdba74',
+      fontFamily: "'Inter', sans-serif"
+    }
+  }
+];
 
 const xToFreq = (x: number, width: number) => {
   const oneThird = width / 3;
@@ -31,6 +106,7 @@ const App: React.FC = () => {
   const [isBinding, setIsBinding] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
+  const [currentTheme, setCurrentTheme] = useState<Theme>(THEMES[0]);
   
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,14 +162,11 @@ const App: React.FC = () => {
     setNodes(prev => prev.map(n => {
       if (n.id === id) {
         const updated = { ...n, ...updates };
-        
         if (updates.subType !== undefined && updated.type === 'OSC') {
             audioEngine.updateOscType(id, updates.subType as any);
         }
-
         if (updates.subType !== undefined && updated.type === 'FX') {
             audioEngine.updateEffectType(id, updates.subType as any);
-            // Re-connect all existing connections involving this node
             connections.forEach(conn => {
                 if (conn.fromId === id || conn.toId === id) {
                     audioEngine.connectNodes(conn.fromId, conn.toId);
@@ -103,18 +176,14 @@ const App: React.FC = () => {
             const h = window.innerHeight;
             applyFxParams(updated, w, h);
         }
-
         if (updates.isAudible !== undefined) audioEngine.updateAudible(id, updates.isAudible);
-        
         if (updates.size !== undefined) {
             const val = updated.size / 300;
             audioEngine.updateParam(id, updated.type === 'OSC' ? 'gain' : 'intensity', val);
         }
-        
         if (updates.frequency !== undefined) {
             audioEngine.updateParam(id, 'frequency', updated.frequency);
         }
-
         return updated;
       }
       return n;
@@ -125,7 +194,6 @@ const App: React.FC = () => {
     const id = node.id;
     const x = node.pos.x;
     const y = node.pos.y;
-    
     if (node.subType.startsWith('filter')) {
         audioEngine.updateParam(id, 'cutoff', xToFreq(x, w) * 5);
         audioEngine.updateParam(id, 'resonance', (h - y) / 40);
@@ -152,16 +220,14 @@ const App: React.FC = () => {
   };
 
   const deleteNode = useCallback((id: string) => {
-    // Sever all audio connections first
-    connections.forEach(c => {
-      if (c.fromId === id || c.toId === id) {
-        audioEngine.disconnectNodes(c.fromId, c.toId);
-      }
+    // Collect connections to disconnect in engine
+    const connectionsToRemove = connections.filter(c => c.fromId === id || c.toId === id);
+    connectionsToRemove.forEach(c => {
+      audioEngine.disconnectNodes(c.fromId, c.toId);
     });
 
     setConnections(prev => prev.filter(c => c.fromId !== id && c.toId !== id));
     setNodes(prev => prev.filter(n => n.id !== id));
-    
     audioEngine.removeNode(id);
     setSelectedId(null);
   }, [connections]);
@@ -218,40 +284,29 @@ const App: React.FC = () => {
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!dragStateRef.current) return;
-    
     const { id, offsetX, offsetY } = dragStateRef.current;
-    
     setNodes(prev => {
         const draggedNodeOrig = prev.find(n => n.id === id);
         if (!draggedNodeOrig) return prev;
-
         const w = window.innerWidth;
         const h = window.innerHeight;
         const halfSize = draggedNodeOrig.size / 2;
-
         let newX = e.clientX - offsetX;
         let newY = e.clientY - offsetY;
-
         newX = Math.max(halfSize, Math.min(w - 320 - halfSize, newX));
         newY = Math.max(halfSize, Math.min(h - halfSize, newY));
-
         const shiftX = newX - draggedNodeOrig.pos.x;
         const shiftY = newY - draggedNodeOrig.pos.y;
-
         return prev.map(n => {
             const isDragged = n.id === id;
             const isBound = n.boundTo === id;
-            
             if (!isDragged && !isBound) return n;
-
             let updatedPos = isDragged 
               ? { x: newX, y: newY }
               : { x: n.pos.x + shiftX, y: n.pos.y + shiftY };
-
             const nHalfSize = n.size / 2;
             updatedPos.x = Math.max(nHalfSize, Math.min(w - 320 - nHalfSize, updatedPos.x));
             updatedPos.y = Math.max(nHalfSize, Math.min(h - nHalfSize, updatedPos.y));
-
             const updatedNode = { ...n, pos: updatedPos };
             if (n.type === 'OSC') {
                 const freq = xToFreq(updatedPos.x, w - 320);
@@ -269,16 +324,31 @@ const App: React.FC = () => {
     dragStateRef.current = null;
   }, []);
 
+  const themeStyle = useMemo(() => ({
+    background: currentTheme.colors.bgGlow,
+    fontFamily: currentTheme.colors.fontFamily,
+    color: currentTheme.colors.buttonText
+  }), [currentTheme]);
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden text-white" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+    <div className="flex h-screen w-screen overflow-hidden" style={themeStyle} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+      <style>{`
+        body { font-family: ${currentTheme.colors.fontFamily}; }
+        .glass-panel { background: ${currentTheme.colors.sidebarBg}; }
+        button { border-color: ${currentTheme.colors.accent}44; color: ${currentTheme.colors.buttonText}; }
+        select { background: #000; color: #fff; }
+        option { background: #000; color: #fff; }
+      `}</style>
+      
+      <div className="fixed inset-0 pointer-events-none" style={{ background: currentTheme.colors.bgGlow, zIndex: -1 }} />
+      
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
-        
         {/* Signal Lines / Flux connections */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
             <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#34d399" stopOpacity="0.4" />
+                <stop offset="0%" stopColor={currentTheme.colors.connStart} stopOpacity="0.4" />
+                <stop offset="100%" stopColor={currentTheme.colors.connEnd} stopOpacity="0.4" />
             </linearGradient>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
@@ -296,7 +366,6 @@ const App: React.FC = () => {
             const isHov = hoveredConnectionId === conn.id;
             const d = `M ${from.pos.x} ${from.pos.y} L ${to.pos.x} ${to.pos.y}`;
             const isFM = to.type === 'OSC';
-            
             return (
               <g 
                 key={conn.id} 
@@ -305,32 +374,17 @@ const App: React.FC = () => {
                 onMouseEnter={() => setHoveredConnectionId(conn.id)}
                 onMouseLeave={() => setHoveredConnectionId(null)}
               >
-                {/* Invisible hit area for easier selection */}
-                <path 
-                  d={d}
-                  stroke="transparent" 
-                  strokeWidth="30" 
-                  className="cursor-pointer"
-                  fill="none"
-                />
-                {/* Secondary glow on hover/select */}
+                <path d={d} stroke="transparent" strokeWidth="30" className="cursor-pointer" fill="none" />
                 {(isSel || isHov) && (
-                  <path 
-                    d={d}
-                    stroke="#fff" 
-                    strokeWidth={isSel ? "8" : "6"} 
-                    strokeOpacity="0.2"
-                    filter="url(#glow)"
-                    fill="none"
-                  />
+                  <path d={d} stroke={currentTheme.colors.accent} strokeWidth={isSel ? "8" : "6"} strokeOpacity="0.3" filter="url(#glow)" fill="none" />
                 )}
                 <path 
-                  d={d}
-                  stroke={isSel ? "#fff" : "url(#signalGrad)"} 
+                  d={d} 
+                  stroke={isSel ? currentTheme.colors.accent : "url(#signalGrad)"} 
                   strokeWidth={isSel ? "5" : "2"} 
                   strokeDasharray={isFM ? "2,2" : "10,5"} 
-                  className={`transition-all ${isHov ? 'opacity-100' : 'opacity-60'}`}
-                  fill="none"
+                  className={`transition-all ${isHov ? 'opacity-100' : 'opacity-60'}`} 
+                  fill="none" 
                 />
                 <circle r="3" fill="#fff" filter="blur(1px)">
                     <animateMotion dur={isFM ? "0.8s" : "2s"} repeatCount="indefinite" path={d} />
@@ -349,6 +403,7 @@ const App: React.FC = () => {
                 isSelected={selectedId === node.id} 
                 isConnecting={isConnecting || isBinding} 
                 hasIncoming={hasIncoming}
+                theme={currentTheme}
                 onMouseDown={handleMouseDown} 
                 onSelect={setSelectedId} 
             />
@@ -356,12 +411,30 @@ const App: React.FC = () => {
         })}
 
         <div className="absolute top-8 left-8 flex gap-4 z-20">
-            <button onClick={() => addNode('OSC')} className="px-6 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/40 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border border-white/10 backdrop-blur-md">Oscillator</button>
-            <button onClick={() => addNode('FX')} className="px-6 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/40 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border border-white/10 backdrop-blur-md">Effect</button>
-            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} className={`px-6 py-2.5 ${isConnecting ? 'bg-white text-black' : 'bg-blue-600/20'} rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border border-white/10 backdrop-blur-md`}>{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
-            <button onClick={toggleMute} className={`px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border border-white/10 backdrop-blur-md ${isMuted ? 'bg-red-600/40 text-red-100' : 'bg-white/5 text-white/60'}`}>
+            <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Oscillator</button>
+            <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Effect</button>
+            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
+            <button onClick={toggleMute} style={{ background: isMuted ? 'rgba(220, 38, 38, 0.4)' : currentTheme.colors.buttonBg }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">
                 {isMuted ? 'Unmute' : 'Mute All'}
             </button>
+        </div>
+
+        {/* Theme Selector UI */}
+        <div className="absolute top-8 right-8 z-20 flex flex-col items-end gap-2">
+            <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 px-2">Atmosphere</label>
+            <div className="relative">
+              <select 
+                value={currentTheme.id}
+                onChange={(e) => {
+                  const theme = THEMES.find(t => t.id === e.target.value);
+                  if (theme) setCurrentTheme(theme);
+                }}
+                className="bg-black/60 border border-white/20 backdrop-blur-3xl rounded-full px-6 py-2 text-[10px] font-black uppercase tracking-widest appearance-none cursor-pointer hover:bg-white/10 transition-all text-white outline-none ring-0 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+              >
+                {THEMES.map(t => <option key={t.id} value={t.id} className="bg-black text-white">{t.name}</option>)}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40 text-[8px]">▼</div>
+            </div>
         </div>
 
         {/* frequency zones markers */}
@@ -372,7 +445,7 @@ const App: React.FC = () => {
         </div>
 
         {(isConnecting || isBinding) && (
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-2xl px-12 py-4 rounded-full border border-white/20 text-[11px] font-black uppercase tracking-[0.3em] animate-pulse z-50">
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-2xl px-12 py-4 rounded-full border border-white/20 text-[11px] font-black uppercase tracking-[0.3em] animate-pulse z-50 shadow-2xl">
                 {isConnecting ? 'Link Signal Destination (Esc to cancel)' : 'Bind Mass Parent (Esc to cancel)'}
             </div>
         )}
@@ -391,6 +464,7 @@ const App: React.FC = () => {
 
       <Sidebar 
         selectedNode={nodes.find(n => n.id === selectedId) || null}
+        theme={currentTheme}
         onUpdate={updateNode}
         onDelete={deleteNode}
         onBind={() => {setIsBinding(true); setIsConnecting(false);}}

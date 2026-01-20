@@ -1,9 +1,10 @@
 
 import React from 'react';
-import { SynthNode } from '../types';
+import { SynthNode, Theme } from '../types';
 
 interface SidebarProps {
   selectedNode: SynthNode | null;
+  theme: Theme;
   onUpdate: (id: string, updates: Partial<SynthNode>) => void;
   onDelete: (id: string) => void;
   onBind: () => void;
@@ -14,6 +15,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
     selectedNode, 
+    theme,
     onUpdate, 
     onDelete,
     onBind,
@@ -26,7 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="w-80 glass-panel h-screen p-8 flex flex-col gap-8 border-l border-white/5">
         <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">Connection</h2>
         <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-            <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-4 leading-relaxed">
+            <p className="text-[10px] opacity-50 uppercase font-black tracking-widest mb-4 leading-relaxed">
               Active flux transmitting signal between bubbles.
             </p>
             <button 
@@ -151,10 +153,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const map = getMappingInfo();
 
   return (
-    <div className="w-80 glass-panel h-screen p-8 flex flex-col gap-6 border-l border-white/5 animate-in slide-in-from-right duration-500 overflow-y-auto z-30 text-white">
+    <div className="w-80 glass-panel h-screen p-8 flex flex-col gap-6 border-l border-white/5 animate-in slide-in-from-right duration-500 overflow-y-auto z-30">
       <header className="border-b border-white/10 pb-4">
         <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{selectedNode.type}</h2>
-        <span className="text-[10px] text-white/30 font-mono block mt-2 tracking-widest">{selectedNode.id.slice(0, 12)}</span>
+        <span className="text-[10px] opacity-30 font-mono block mt-2 tracking-widest">{selectedNode.id.slice(0, 12)}</span>
       </header>
 
       <section className="space-y-6 flex-1">
@@ -164,6 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button 
               onClick={() => onUpdate(selectedNode.id, { isAudible: !selectedNode.isAudible })}
               className={`w-14 h-7 rounded-full transition-all relative ${selectedNode.isAudible ? 'bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.5)]' : 'bg-gray-800'}`}
+              style={{ background: selectedNode.isAudible ? theme.colors.accent : '#333' }}
             >
               <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all shadow-md ${selectedNode.isAudible ? 'left-8' : 'left-1'}`} />
             </button>
@@ -171,65 +174,65 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Profile</label>
+          <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Profile</label>
           <div className="relative">
             <select 
-                className="w-full bg-[#111] border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
-                style={{ colorScheme: 'dark' }}
+                className="w-full bg-black border border-white/20 rounded-xl p-4 text-xs focus:outline-none focus:ring-2 appearance-none font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors text-white"
+                style={{ ringColor: theme.colors.accent }}
                 value={selectedNode.subType}
                 onChange={(e) => onUpdate(selectedNode.id, { subType: e.target.value as any })}
             >
                 {isOsc ? (
                 <>
-                    <option value="sine" className="bg-[#111] text-white py-2">Sine Wave</option>
-                    <option value="square" className="bg-[#111] text-white py-2">Square Wave</option>
-                    <option value="sawtooth" className="bg-[#111] text-white py-2">Sawtooth Wave</option>
-                    <option value="triangle" className="bg-[#111] text-white py-2">Triangle Wave</option>
+                    <option value="sine" className="bg-black text-white py-2">Sine Wave</option>
+                    <option value="square" className="bg-black text-white py-2">Square Wave</option>
+                    <option value="sawtooth" className="bg-black text-white py-2">Sawtooth Wave</option>
+                    <option value="triangle" className="bg-black text-white py-2">Triangle Wave</option>
                 </>
                 ) : (
                 <>
-                    <option value="filter-lp" className="bg-[#111] text-white py-2">Low-Pass Filter</option>
-                    <option value="filter-hp" className="bg-[#111] text-white py-2">High-Pass Filter</option>
-                    <option value="filter-bp" className="bg-[#111] text-white py-2">Band-Pass Filter</option>
-                    <option value="delay" className="bg-[#111] text-white py-2">Echo Delay</option>
-                    <option value="distortion" className="bg-[#111] text-white py-2">Hard Distortion</option>
-                    <option value="bitcrusher" className="bg-[#111] text-white py-2">Bitcrusher</option>
-                    <option value="phaser" className="bg-[#111] text-white py-2">Liquid Phaser</option>
-                    <option value="chorus" className="bg-[#111] text-white py-2">Deep Chorus</option>
-                    <option value="tremolo" className="bg-[#111] text-white py-2">Wave Tremolo</option>
-                    <option value="reverb" className="bg-[#111] text-white py-2">Space Reverb</option>
+                    <option value="filter-lp" className="bg-black text-white py-2">Low-Pass Filter</option>
+                    <option value="filter-hp" className="bg-black text-white py-2">High-Pass Filter</option>
+                    <option value="filter-bp" className="bg-black text-white py-2">Band-Pass Filter</option>
+                    <option value="delay" className="bg-black text-white py-2">Echo Delay</option>
+                    <option value="distortion" className="bg-black text-white py-2">Hard Distortion</option>
+                    <option value="bitcrusher" className="bg-black text-white py-2">Bitcrusher</option>
+                    <option value="phaser" className="bg-black text-white py-2">Liquid Phaser</option>
+                    <option value="chorus" className="bg-black text-white py-2">Deep Chorus</option>
+                    <option value="tremolo" className="bg-black text-white py-2">Wave Tremolo</option>
+                    <option value="reverb" className="bg-black text-white py-2">Space Reverb</option>
                 </>
                 )}
             </select>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40 text-[8px] font-black">▼</div>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40 text-[8px] font-black">▼</div>
           </div>
         </div>
 
-        {/* Enhanced Visual Parameters */}
+        {/* Visual Parameters */}
         <div className="space-y-4">
           <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2 shadow-inner">
-            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-40">
               <span>X: {map.x}</span>
-              <span className="text-white tabular-nums">{map.xVal}</span>
+              <span className="opacity-100 tabular-nums">{map.xVal}</span>
             </div>
             <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 transition-all duration-75 shadow-[0_0_8px_rgba(99,102,241,0.8)]" style={{ width: `${map.xPercent}%` }} />
+              <div className="h-full transition-all duration-75 shadow-lg" style={{ width: `${map.xPercent}%`, background: theme.colors.accent }} />
             </div>
           </div>
 
           <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2 shadow-inner">
-            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-40">
               <span>Y: {map.y}</span>
-              <span className="text-white tabular-nums">{map.yVal}</span>
+              <span className="opacity-100 tabular-nums">{map.yVal}</span>
             </div>
             <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 transition-all duration-75 shadow-[0_0_8px_rgba(52,211,153,0.8)]" style={{ width: `${map.yPercent}%` }} />
+              <div className="h-full transition-all duration-75 shadow-lg" style={{ width: `${map.yPercent}%`, background: theme.colors.connEnd }} />
             </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          <label className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] block">Bubble Density</label>
+          <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Bubble Density</label>
           <input 
             type="range" min="40" max="400" value={selectedNode.size}
             onChange={(e) => onUpdate(selectedNode.id, { size: parseInt(e.target.value) })}
@@ -253,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </section>
 
-      <footer className="p-5 bg-white/5 rounded-2xl border border-white/5 text-[9px] text-white/30 uppercase tracking-[0.2em] font-black mt-auto text-center leading-relaxed">
+      <footer className="p-5 bg-white/5 rounded-2xl border border-white/5 text-[9px] opacity-30 uppercase tracking-[0.2em] font-black mt-auto text-center leading-relaxed">
         Spatial coordinates mapped to spectral flux.
       </footer>
     </div>

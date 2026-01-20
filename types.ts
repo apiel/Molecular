@@ -18,6 +18,27 @@ export interface Position {
   y: number;
 }
 
+export interface ThemeColors {
+  oscStart: string;
+  oscEnd: string;
+  fxStart: string;
+  fxEnd: string;
+  connStart: string;
+  connEnd: string;
+  bgGlow: string;
+  sidebarBg: string;
+  accent: string;
+  buttonBg: string;
+  buttonText: string;
+  fontFamily: string;
+}
+
+export interface Theme {
+  id: string;
+  name: string;
+  colors: ThemeColors;
+}
+
 export interface SynthNode {
   id: string;
   type: NodeType;

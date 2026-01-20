@@ -1,12 +1,13 @@
 
 import React, { useMemo } from 'react';
-import { SynthNode } from '../types';
+import { SynthNode, Theme } from '../types';
 
 interface BubbleProps {
   node: SynthNode;
   isSelected: boolean;
   isConnecting: boolean;
   hasIncoming: boolean;
+  theme: Theme;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
   onSelect: (id: string) => void;
 }
@@ -16,21 +17,28 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
   isSelected, 
   isConnecting,
   hasIncoming,
+  theme,
   onMouseDown, 
   onSelect 
 }) => {
   const bubbleStyles = useMemo(() => {
     const base = "absolute flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none overflow-hidden liquid-surface";
     const border = isSelected ? "border-[3px] border-white shadow-[0_0_60px_rgba(255,255,255,0.3)]" : "border border-white/10 shadow-2xl";
-    
-    const bg = node.type === 'OSC' 
-        ? (node.isAudible 
-            ? 'bg-gradient-to-br from-indigo-500 via-purple-600 to-indigo-900' 
-            : 'bg-gradient-to-br from-slate-700 to-slate-900 grayscale opacity-60') 
-        : 'bg-gradient-to-br from-emerald-500 via-teal-600 to-emerald-900';
-        
-    return `${base} ${border} ${bg}`;
-  }, [isSelected, node.type, node.isAudible]);
+    return `${base} ${border}`;
+  }, [isSelected]);
+
+  const backgroundStyle = useMemo(() => {
+    if (node.type === 'OSC') {
+        if (!node.isAudible) return { background: '#27272a', opacity: 0.6 }; // Gray/Muted
+        return { 
+            background: `linear-gradient(135deg, ${theme.colors.oscStart} 0%, ${theme.colors.oscEnd} 100%)`
+        };
+    } else {
+        return { 
+            background: `linear-gradient(135deg, ${theme.colors.fxStart} 0%, ${theme.colors.fxEnd} 100%)`
+        };
+    }
+  }, [node.type, node.isAudible, theme]);
 
   // Ripple speed based on frequency for OSC, or static for FX
   const rippleDuration = node.type === 'OSC' 
@@ -52,7 +60,8 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
         transform: isSelected ? 'scale(1.1)' : 'scale(1)',
         willChange: 'left, top, transform',
         zIndex: isSelected ? 40 : 20,
-        transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+        transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        ...backgroundStyle
       }}
       onMouseDown={(e) => {
         e.stopPropagation();
