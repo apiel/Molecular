@@ -183,7 +183,6 @@ const App: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize with default pair if empty
   useEffect(() => {
     if (nodes.length === 0) {
       const w = window.innerWidth - 320;
@@ -619,7 +618,7 @@ const App: React.FC = () => {
                     </>
                 ) : (
                     <>
-                        <svg className="w-7 h-7 fill-current flex-shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                        <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                         <span>Play</span>
                     </>
                 )}
