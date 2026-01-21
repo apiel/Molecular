@@ -561,9 +561,9 @@ const App: React.FC = () => {
             </filter>
           </defs>
           <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)` }}>
-            {/* World boundary line */}
+            {/* Frequency boundary line moving with workspace */}
             <line 
-                x1={canvasWidth / 3} y1={-10000} x2={canvasWidth / 3} y2={10000} 
+                x1={canvasWidth / 3} y1={-5000} x2={canvasWidth / 3} y2={5000} 
                 stroke="white" strokeWidth="1" strokeOpacity="0.05" strokeDasharray="10,10" 
             />
 
@@ -591,8 +591,8 @@ const App: React.FC = () => {
         </svg>
 
         <div style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)` }}>
-          <div className="absolute" style={{ left: canvasWidth / 3, top: 0, height: '200vh', width: 200, pointerEvents: 'none' }}>
-            <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr] absolute bottom-0 left-4">
+          <div className="absolute" style={{ left: canvasWidth / 3, top: 0, height: '100vh', width: 200, pointerEvents: 'none' }}>
+            <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr] absolute bottom-12 left-4">
                World Depth Spectrum (0-20Hz)
             </div>
           </div>

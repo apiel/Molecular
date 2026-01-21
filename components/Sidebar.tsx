@@ -40,9 +40,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (selectedConnectionId) {
       return (
         <>
-          <div className="flex justify-between items-center lg:block">
+          <div className="flex justify-between items-center">
             <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">Flux Link</h2>
-            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg">CLOSE</button>
+            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg hover:bg-white/5 transition-colors">CLOSE</button>
           </div>
           <div className="p-4 bg-white/5 rounded-xl border border-white/10">
               <p className="text-[10px] opacity-50 uppercase font-black tracking-widest mb-4 leading-relaxed">
@@ -55,20 +55,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Sever Link
               </button>
           </div>
-          <button onClick={onClose} className="mt-auto px-8 py-4 bg-white/5 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all">Close Panel</button>
         </>
       );
     }
 
     if (!selectedNode) {
       return (
-        <div className="flex-1 flex flex-col justify-center items-center text-gray-400">
-          <div className="w-20 h-20 rounded-full border-2 border-dashed border-white/10 mb-8 flex items-center justify-center animate-pulse">
-             <svg className="w-8 h-8 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        <>
+          <div className="flex justify-end">
+            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg hover:bg-white/5 transition-colors">CLOSE</button>
           </div>
-          <p className="text-center font-black uppercase tracking-[0.2em] text-[10px] opacity-30 px-8 leading-loose">Select a molecule or flux link to modify structure</p>
-          <button onClick={onClose} className="mt-12 px-8 py-4 bg-white/5 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all">Return to Space</button>
-        </div>
+          <div className="flex-1 flex flex-col justify-center items-center text-gray-400">
+            <div className="w-20 h-20 rounded-full border-2 border-dashed border-white/10 mb-8 flex items-center justify-center animate-pulse">
+               <svg className="w-8 h-8 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            <p className="text-center font-black uppercase tracking-[0.2em] text-[10px] opacity-30 px-8 leading-loose">
+              Select a molecule or flux link to modify structure
+            </p>
+          </div>
+        </>
       );
     }
 
@@ -101,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{selectedNode.type}</h2>
                 <span className="text-[10px] opacity-30 font-mono block mt-2 tracking-widest">{selectedNode.id.slice(0, 12)}</span>
             </div>
-            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg">CLOSE</button>
+            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg hover:bg-white/5 transition-colors">CLOSE</button>
           </header>
 
           <section className="space-y-6 flex-1">
@@ -211,9 +216,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     Deconstruct Molecule
                 </button>
             </div>
-            <button onClick={onClose} className="w-full py-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all">
-              Return to Space
-            </button>
           </section>
         </>
     );
