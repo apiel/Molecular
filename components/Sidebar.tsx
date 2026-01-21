@@ -145,24 +145,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                     {isOsc ? (
                     <>
-                        <option value="sine">Sine</option>
-                        <option value="square">Square</option>
-                        <option value="sawtooth">Saw</option>
-                        <option value="triangle">Triangle</option>
-                        <option value="noise">Noise</option>
-                        <option value="sample-hold">Sample & Hold</option>
+                        <option className="bg-zinc-900" value="sine">Sine</option>
+                        <option className="bg-zinc-900" value="square">Square</option>
+                        <option className="bg-zinc-900" value="sawtooth">Saw</option>
+                        <option className="bg-zinc-900" value="triangle">Triangle</option>
+                        <option className="bg-zinc-900" value="noise">Noise</option>
+                        <option className="bg-zinc-900" value="sample-hold">Sample & Hold</option>
                     </>
                     ) : (
                     <>
-                        <option value="filter-lp">LP Filter</option>
-                        <option value="filter-hp">HP Filter</option>
-                        <option value="delay">Echo Delay</option>
-                        <option value="distortion">Hard Distortion</option>
-                        <option value="reverb">Space Reverb</option>
-                        <option value="phaser">Liquid Phaser</option>
-                        <option value="chorus">Deep Chorus</option>
-                        <option value="tremolo">Wave Tremolo</option>
-                        <option value="bitcrusher">Degrade</option>
+                        <option className="bg-zinc-900" value="filter-lp">LP Filter</option>
+                        <option className="bg-zinc-900" value="filter-hp">HP Filter</option>
+                        <option className="bg-zinc-900" value="delay">Echo Delay</option>
+                        <option className="bg-zinc-900" value="distortion">Hard Distortion</option>
+                        <option className="bg-zinc-900" value="reverb">Space Reverb</option>
+                        <option className="bg-zinc-900" value="phaser">Liquid Phaser</option>
+                        <option className="bg-zinc-900" value="chorus">Deep Chorus</option>
+                        <option className="bg-zinc-900" value="tremolo">Wave Tremolo</option>
+                        <option className="bg-zinc-900" value="bitcrusher">Degrade</option>
                     </>
                     )}
                 </select>
