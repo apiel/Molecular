@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { SynthNode } from '../types';
+import { SynthNode, ImpactSettings } from '../types';
 import { audioEngine } from '../services/audioEngine';
 
 interface Catalyst {
@@ -15,9 +15,10 @@ interface CatalystFieldProps {
   density: number;
   nodes: SynthNode[];
   viewOffset: { x: number, y: number };
+  impactSettings: ImpactSettings;
 }
 
-export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, viewOffset }) => {
+export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, viewOffset, impactSettings }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const catalystsRef = useRef<Catalyst[]>([]);
   const requestRef = useRef<number>(null);
@@ -95,7 +96,7 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
             if (distSq < radius * radius) {
                 // Calculate normalized panning (-1 to 1) based on screen position
                 const pan = (sx / canvasWidth) * 2 - 1;
-                audioEngine.triggerDisturbance(node.id, c.vy, pan);
+                audioEngine.triggerDisturbance(node.id, c.vy, pan, impactSettings);
                 
                 // Elastic bounce
                 c.vx *= -1.1;
@@ -115,7 +116,7 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [nodes, viewOffset]);
+  }, [nodes, viewOffset, impactSettings]);
 
   useEffect(() => {
     const handleResize = () => {

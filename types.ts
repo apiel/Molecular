@@ -38,6 +38,12 @@ export interface Theme {
   colors: ThemeColors;
 }
 
+export interface ImpactSettings {
+  toneSpike: boolean;
+  sparkTransients: boolean;
+  paramFlutter: boolean;
+}
+
 export interface SynthNode {
   id: string;
   type: NodeType;

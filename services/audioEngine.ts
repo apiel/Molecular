@@ -1,4 +1,4 @@
-import { OscType, FxType } from '../types';
+import { OscType, FxType, ImpactSettings } from '../types';
 
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -119,7 +119,7 @@ class AudioEngine {
   /**
    * Triggers a spatialized high-energy impact sound and disturbs the molecule's harmonics.
    */
-  public triggerDisturbance(id: string, velocityY: number, pan: number) {
+  public triggerDisturbance(id: string, velocityY: number, pan: number, settings: ImpactSettings) {
     const node = this.nodes.get(id);
     if (!node || !this.ctx || !this.impactGain) return;
 
@@ -127,63 +127,62 @@ class AudioEngine {
     const isFalling = velocityY > 0;
     const intensity = Math.min(1, Math.abs(velocityY) / 10);
 
-    // --- 1. SPATIAL TRANSIENT SOUND ---
-    const panner = this.ctx.createPanner();
-    panner.panningModel = 'equalpower';
-    panner.setPosition(pan, 0, 1 - Math.abs(pan));
-    panner.connect(this.impactGain);
+    // --- 1. SPATIAL TRANSIENT SOUND (SPARKS) ---
+    if (settings.sparkTransients) {
+      const panner = this.ctx.createPanner();
+      panner.panningModel = 'equalpower';
+      panner.setPosition(pan, 0, 1 - Math.abs(pan));
+      panner.connect(this.impactGain);
 
-    // The "Spark" (Noise burst)
-    if (this.noiseBuffer) {
-      const noiseSource = this.ctx.createBufferSource();
-      const noiseFilter = this.ctx.createBiquadFilter();
-      const noiseEnv = this.ctx.createGain();
+      // The "Spark" (Noise burst)
+      if (this.noiseBuffer) {
+        const noiseSource = this.ctx.createBufferSource();
+        const noiseFilter = this.ctx.createBiquadFilter();
+        const noiseEnv = this.ctx.createGain();
 
-      noiseSource.buffer = this.noiseBuffer;
-      noiseFilter.type = 'highpass';
-      noiseFilter.frequency.setValueAtTime(isFalling ? 2000 : 5000, now);
+        noiseSource.buffer = this.noiseBuffer;
+        noiseFilter.type = 'highpass';
+        noiseFilter.frequency.setValueAtTime(isFalling ? 2000 : 5000, now);
+        
+        noiseEnv.gain.setValueAtTime(0, now);
+        noiseEnv.gain.linearRampToValueAtTime(0.3 * intensity, now + 0.005);
+        noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseEnv);
+        noiseEnv.connect(panner);
+        noiseSource.start(now);
+        noiseSource.stop(now + 0.1);
+      }
+
+      // The "Ping" (Chirp)
+      const ping = this.ctx.createOscillator();
+      const pingEnv = this.ctx.createGain();
+      ping.type = 'sine';
+      const startFreq = isFalling ? 800 : 2500;
+      ping.frequency.setValueAtTime(startFreq, now);
+      ping.frequency.exponentialRampToValueAtTime(startFreq * 0.1, now + 0.04);
       
-      noiseEnv.gain.setValueAtTime(0, now);
-      noiseEnv.gain.linearRampToValueAtTime(0.3 * intensity, now + 0.005);
-      noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      pingEnv.gain.setValueAtTime(0, now);
+      pingEnv.gain.linearRampToValueAtTime(0.2 * intensity, now + 0.002);
+      pingEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
-      noiseSource.connect(noiseFilter);
-      noiseFilter.connect(noiseEnv);
-      noiseEnv.connect(panner);
-      noiseSource.start(now);
-      noiseSource.stop(now + 0.1);
+      ping.connect(pingEnv);
+      pingEnv.connect(panner);
+      ping.start(now);
+      ping.stop(now + 0.1);
     }
 
-    // The "Ping" (Chirp)
-    const ping = this.ctx.createOscillator();
-    const pingEnv = this.ctx.createGain();
-    ping.type = 'sine';
-    const startFreq = isFalling ? 800 : 2500;
-    ping.frequency.setValueAtTime(startFreq, now);
-    ping.frequency.exponentialRampToValueAtTime(startFreq * 0.1, now + 0.04);
-    
-    pingEnv.gain.setValueAtTime(0, now);
-    pingEnv.gain.linearRampToValueAtTime(0.2 * intensity, now + 0.002);
-    pingEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-
-    ping.connect(pingEnv);
-    pingEnv.connect(panner);
-    ping.start(now);
-    ping.stop(now + 0.1);
-
-    // --- 2. MOLECULE DISTURBANCE ---
-    const centsShift = -velocityY * 200; 
-    
-    if (node.params.detune instanceof AudioParam) {
+    // --- 2. MOLECULE DISTURBANCE (TONE/PARAMS) ---
+    if (settings.toneSpike && node.params.detune instanceof AudioParam) {
       const p = node.params.detune;
+      const centsShift = -velocityY * 200; 
       p.cancelScheduledValues(now);
-      // Sharp jolt
       p.setTargetAtTime(centsShift, now, 0.01);
-      // Easing back to center
       p.setTargetAtTime(0, now + 0.05, 0.2);
     } 
     
-    if (node.params.cutoff instanceof AudioParam) {
+    if (settings.paramFlutter && node.params.cutoff instanceof AudioParam) {
       const p = node.params.cutoff;
       const base = p.value;
       const shift = isFalling ? -base * 0.4 : base * 0.6;
