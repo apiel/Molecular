@@ -145,7 +145,11 @@ const App: React.FC = () => {
   const [impactSettings, setImpactSettings] = useState<ImpactSettings>({
     toneSpike: true,
     sparkTransients: true,
-    paramFlutter: true
+    paramFlutter: true,
+    subThump: true,
+    glitchShred: false,
+    echoSplash: false,
+    filterWarp: true
   });
   
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
@@ -563,7 +567,6 @@ const App: React.FC = () => {
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
             <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                {/* Fix: replaced 'E' with 'currentTheme' */}
                 <stop offset="0%" stopColor={currentTheme.colors.connStart} stopOpacity="0.4" />
                 <stop offset="100%" stopColor={currentTheme.colors.connEnd} stopOpacity="0.4" />
             </linearGradient>
@@ -631,7 +634,7 @@ const App: React.FC = () => {
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
             {isMenuOpen && (
-                <div className="absolute top-12 right-0 w-72 bg-black/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-[0_20px_50px_rgba(0,0,0,1)] z-50 animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute top-12 right-0 w-80 bg-black/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-[0_20px_50px_rgba(0,0,0,1)] z-50 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                     <div className="p-4 border-b border-white/5 mb-1">
                         <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 block">Atmosphere</label>
                         <select value={currentTheme.id} onChange={(e) => { const theme = THEMES.find(t => t.id === e.target.value); if (theme) setCurrentTheme(theme); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white outline-none cursor-pointer mb-4">
@@ -650,18 +653,34 @@ const App: React.FC = () => {
 
                           <div className="space-y-2">
                             <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1 block">Impact Protocols</label>
-                            <div className="grid grid-cols-1 gap-2">
-                              <label className="flex items-center gap-3 cursor-pointer group">
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
                                 <input type="checkbox" checked={impactSettings.toneSpike} onChange={e => setImpactSettings(s => ({...s, toneSpike: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
-                                <span className="text-[9px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Tone Warp</span>
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Tone Warp</span>
                               </label>
-                              <label className="flex items-center gap-3 cursor-pointer group">
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
                                 <input type="checkbox" checked={impactSettings.sparkTransients} onChange={e => setImpactSettings(s => ({...s, sparkTransients: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
-                                <span className="text-[9px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Energy Sparks</span>
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Sparks</span>
                               </label>
-                              <label className="flex items-center gap-3 cursor-pointer group">
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
                                 <input type="checkbox" checked={impactSettings.paramFlutter} onChange={e => setImpactSettings(s => ({...s, paramFlutter: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
-                                <span className="text-[9px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Effect Flutter</span>
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Flutter</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.subThump} onChange={e => setImpactSettings(s => ({...s, subThump: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Sub Thump</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.glitchShred} onChange={e => setImpactSettings(s => ({...s, glitchShred: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Glitch Shred</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.echoSplash} onChange={e => setImpactSettings(s => ({...s, echoSplash: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Ghost Echo</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.filterWarp} onChange={e => setImpactSettings(s => ({...s, filterWarp: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Filter Warp</span>
                               </label>
                             </div>
                           </div>
@@ -682,7 +701,7 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {/* Sidebar Toggle Tab - Only show if closed */}
+        {/* Sidebar Toggle Tab */}
         {!isSidebarOpen && (
             <button onClick={() => setIsSidebarOpen(true)} style={{ background: 'rgba(0,0,0,0.4)', color: '#fff' }} className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-32 flex items-center justify-center rounded-l-2xl border-l border-t border-b border-white/20 backdrop-blur-md z-30 transition-all hover:w-10 active:scale-95 group">
                 <div className="transition-transform duration-300 rotate-0"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg></div>

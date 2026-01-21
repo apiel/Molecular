@@ -26,7 +26,6 @@ class AudioEngine {
       this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
       
-      // Dedicated gain for impact transients
       this.impactGain = this.ctx.createGain();
       this.impactGain.gain.setValueAtTime(0.4, this.ctx.currentTime);
       this.impactGain.connect(this.masterGain);
@@ -116,9 +115,6 @@ class AudioEngine {
     this.updateAudible(id, isAudible);
   }
 
-  /**
-   * Triggers a spatialized high-energy impact sound and disturbs the molecule's harmonics.
-   */
   public triggerDisturbance(id: string, velocityY: number, pan: number, settings: ImpactSettings) {
     const node = this.nodes.get(id);
     if (!node || !this.ctx || !this.impactGain) return;
@@ -127,53 +123,91 @@ class AudioEngine {
     const isFalling = velocityY > 0;
     const intensity = Math.min(1, Math.abs(velocityY) / 10);
 
-    // --- 1. SPATIAL TRANSIENT SOUND (SPARKS) ---
-    if (settings.sparkTransients) {
-      const panner = this.ctx.createPanner();
-      panner.panningModel = 'equalpower';
-      panner.setPosition(pan, 0, 1 - Math.abs(pan));
-      panner.connect(this.impactGain);
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'equalpower';
+    panner.setPosition(pan, 0, 1 - Math.abs(pan));
+    panner.connect(this.impactGain);
 
-      // The "Spark" (Noise burst)
-      if (this.noiseBuffer) {
-        const noiseSource = this.ctx.createBufferSource();
-        const noiseFilter = this.ctx.createBiquadFilter();
-        const noiseEnv = this.ctx.createGain();
-
-        noiseSource.buffer = this.noiseBuffer;
-        noiseFilter.type = 'highpass';
-        noiseFilter.frequency.setValueAtTime(isFalling ? 2000 : 5000, now);
-        
-        noiseEnv.gain.setValueAtTime(0, now);
-        noiseEnv.gain.linearRampToValueAtTime(0.3 * intensity, now + 0.005);
-        noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-
-        noiseSource.connect(noiseFilter);
-        noiseFilter.connect(noiseEnv);
-        noiseEnv.connect(panner);
-        noiseSource.start(now);
-        noiseSource.stop(now + 0.1);
-      }
-
-      // The "Ping" (Chirp)
-      const ping = this.ctx.createOscillator();
-      const pingEnv = this.ctx.createGain();
-      ping.type = 'sine';
-      const startFreq = isFalling ? 800 : 2500;
-      ping.frequency.setValueAtTime(startFreq, now);
-      ping.frequency.exponentialRampToValueAtTime(startFreq * 0.1, now + 0.04);
-      
-      pingEnv.gain.setValueAtTime(0, now);
-      pingEnv.gain.linearRampToValueAtTime(0.2 * intensity, now + 0.002);
-      pingEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-
-      ping.connect(pingEnv);
-      pingEnv.connect(panner);
-      ping.start(now);
-      ping.stop(now + 0.1);
+    // ---PROTOCOL: SPARKS---
+    if (settings.sparkTransients && this.noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      const noiseFilter = this.ctx.createBiquadFilter();
+      const noiseEnv = this.ctx.createGain();
+      noiseSource.buffer = this.noiseBuffer;
+      noiseFilter.type = 'highpass';
+      noiseFilter.frequency.setValueAtTime(isFalling ? 2000 : 5000, now);
+      noiseEnv.gain.setValueAtTime(0, now);
+      noiseEnv.gain.linearRampToValueAtTime(0.3 * intensity, now + 0.005);
+      noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      noiseSource.connect(noiseFilter);
+      noiseFilter.connect(noiseEnv);
+      noiseEnv.connect(panner);
+      noiseSource.start(now);
+      noiseSource.stop(now + 0.1);
     }
 
-    // --- 2. MOLECULE DISTURBANCE (TONE/PARAMS) ---
+    // ---PROTOCOL: SUB THUMP---
+    if (settings.subThump) {
+      const thump = this.ctx.createOscillator();
+      const thumpEnv = this.ctx.createGain();
+      thump.type = 'sine';
+      thump.frequency.setValueAtTime(120, now);
+      thump.frequency.exponentialRampToValueAtTime(20, now + 0.15);
+      thumpEnv.gain.setValueAtTime(0, now);
+      thumpEnv.gain.linearRampToValueAtTime(0.6 * intensity, now + 0.005);
+      thumpEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      thump.connect(thumpEnv);
+      thumpEnv.connect(panner);
+      thump.start(now);
+      thump.stop(now + 0.3);
+    }
+
+    // ---PROTOCOL: GLITCH SHRED---
+    if (settings.glitchShred) {
+      const glitch = this.ctx.createOscillator();
+      const glitchEnv = this.ctx.createGain();
+      glitch.type = 'square';
+      glitch.frequency.setValueAtTime(Math.random() * 5000 + 1000, now);
+      glitchEnv.gain.setValueAtTime(0, now);
+      glitchEnv.gain.setValueAtTime(0.15 * intensity, now + 0.001);
+      glitchEnv.gain.setValueAtTime(0, now + 0.01);
+      glitchEnv.gain.setValueAtTime(0.1 * intensity, now + 0.015);
+      glitchEnv.gain.linearRampToValueAtTime(0, now + 0.03);
+      glitch.connect(glitchEnv);
+      glitchEnv.connect(panner);
+      glitch.start(now);
+      glitch.stop(now + 0.05);
+    }
+
+    // ---PROTOCOL: ECHO SPLASH---
+    if (settings.echoSplash) {
+      const splashDelay = this.ctx.createDelay(1.0);
+      const splashFeedback = this.ctx.createGain();
+      const splashEnv = this.ctx.createGain();
+      splashDelay.delayTime.setValueAtTime(0.1 + Math.random() * 0.2, now);
+      splashFeedback.gain.setValueAtTime(0.5, now);
+      splashEnv.gain.setValueAtTime(0, now);
+      splashEnv.gain.linearRampToValueAtTime(0.4 * intensity, now + 0.01);
+      splashEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      
+      const splashInput = this.ctx.createGain();
+      splashInput.gain.setValueAtTime(1, now);
+      splashInput.connect(splashDelay);
+      splashDelay.connect(splashFeedback);
+      splashFeedback.connect(splashDelay);
+      splashDelay.connect(splashEnv);
+      splashEnv.connect(panner);
+
+      // Trigger the "Ping" into the delay
+      const ping = this.ctx.createOscillator();
+      ping.type = 'triangle';
+      ping.frequency.setValueAtTime(2000, now);
+      ping.connect(splashInput);
+      ping.start(now);
+      ping.stop(now + 0.02);
+    }
+
+    // --- MOLECULE HARMONIC DISTURBANCE ---
     if (settings.toneSpike && node.params.detune instanceof AudioParam) {
       const p = node.params.detune;
       const centsShift = -velocityY * 200; 
@@ -189,6 +223,14 @@ class AudioEngine {
       p.cancelScheduledValues(now);
       p.setTargetAtTime(base + shift, now, 0.01);
       p.setTargetAtTime(base, now + 0.04, 0.15);
+    }
+
+    if (settings.filterWarp && node.params.cutoff instanceof AudioParam) {
+        const p = node.params.cutoff;
+        const base = p.value;
+        p.cancelScheduledValues(now);
+        p.exponentialRampToValueAtTime(Math.min(20000, base * 5), now + 0.05);
+        p.exponentialRampToValueAtTime(base, now + 0.2);
     }
   }
 

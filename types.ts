@@ -42,6 +42,10 @@ export interface ImpactSettings {
   toneSpike: boolean;
   sparkTransients: boolean;
   paramFlutter: boolean;
+  subThump: boolean;
+  glitchShred: boolean;
+  echoSplash: boolean;
+  filterWarp: boolean;
 }
 
 export interface SynthNode {
