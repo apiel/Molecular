@@ -20,15 +20,16 @@ class AudioEngine {
 
   public init() {
     if (!this.ctx) {
-      this.ctx = new AudioContext();
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.masterGain = this.ctx.createGain();
       // Start at 0 gain because app starts in "Stop" state
       this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
       this.createNoiseBuffer();
     }
+    
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(e => console.error("Context resume failed", e));
     }
   }
 
@@ -47,15 +48,18 @@ class AudioEngine {
     this.isMuted = muted;
     if (!this.masterGain || !this.ctx) return;
     // Standard drone level is 0.3 when playing, 0 when stopped
-    this.masterGain.gain.setTargetAtTime(muted ? 0 : 0.3, this.ctx.currentTime, 0.1);
+    const target = muted ? 0 : 0.3;
+    this.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.1);
   }
 
   public createOscillator(id: string, type: OscType, freq: number, gain: number, isAudible: boolean) {
+    this.init(); // Safety check for context
     if (!this.ctx || !this.masterGain) return;
 
     let mainNode: AudioNode;
     let params: { [key: string]: AudioParam | { value: number } } = {};
     const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, this.ctx.currentTime);
 
     if (type === 'noise') {
       const source = this.ctx.createBufferSource();
@@ -134,6 +138,7 @@ class AudioEngine {
   }
 
   public createEffect(id: string, type: FxType) {
+    this.init();
     if (!this.ctx || !this.masterGain) return;
 
     let input: AudioNode;
