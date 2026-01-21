@@ -24,17 +24,18 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
 
   useEffect(() => {
     // Re-seed catalysts when density changes
-    const count = Math.floor(density * 1.5);
+    // Increased multiplier to allow for massive amounts of particles
+    const count = Math.floor(density * 3.0);
     const newCatalysts: Catalyst[] = [];
-    const colors = ['#ffffff', '#818cf8', '#34d399', '#f472b6'];
+    const colors = ['#ffffff', '#818cf8', '#34d399', '#f472b6', '#fbbf24'];
     
     for (let i = 0; i < count; i++) {
       newCatalysts.push({
-        x: Math.random() * 5000 - 2500, // Large world bounds
-        y: Math.random() * 5000 - 2500,
-        vx: (Math.random() - 0.5) * 6,
-        vy: (Math.random() - 0.5) * 8,
-        size: Math.random() * 2 + 1,
+        x: Math.random() * 6000 - 3000, 
+        y: Math.random() * 6000 - 3000,
+        vx: (Math.random() - 0.5) * 8,
+        vy: (Math.random() - 0.5) * 10,
+        size: Math.random() * 1.5 + 0.5,
         color: colors[Math.floor(Math.random() * colors.length)]
       });
     }
@@ -49,48 +50,42 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Catalysts live in "World Space" but we draw them in "Screen Space"
     const catalysts = catalystsRef.current;
-    
-    ctx.save();
-    // No need to translate ctx because we are calculating screen coords manually for performance
+    const nodeCount = nodes.length;
     
     for (let i = 0; i < catalysts.length; i++) {
       const c = catalysts[i];
       
-      // Update pos
       c.x += c.vx;
       c.y += c.vy;
 
-      // Wrap around world bounds (arbitrary large box)
-      if (c.x > 3000) c.x = -3000;
-      if (c.x < -3000) c.x = 3000;
-      if (c.y > 3000) c.y = -3000;
-      if (c.y < -3000) c.y = 3000;
+      // Wrap around larger world bounds
+      if (c.x > 3500) c.x = -3500;
+      if (c.x < -3500) c.x = 3500;
+      if (c.y > 3500) c.y = -3500;
+      if (c.y < -3500) c.y = 3500;
 
-      // Screen coords
       const sx = c.x + viewOffset.x;
       const sy = c.y + viewOffset.y;
 
-      // Only draw if on screen
-      if (sx > -50 && sx < canvas.width + 50 && sy > -50 && sy < canvas.height + 50) {
-        // Draw trail
+      // Render check
+      if (sx > -100 && sx < canvas.width + 100 && sy > -100 && sy < canvas.height + 100) {
         ctx.beginPath();
         ctx.moveTo(sx, sy);
-        ctx.lineTo(sx - c.vx * 3, sy - c.vy * 3);
+        ctx.lineTo(sx - c.vx * 2, sy - c.vy * 2);
         ctx.strokeStyle = c.color;
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = 0.3;
         ctx.lineWidth = c.size;
         ctx.stroke();
 
         ctx.beginPath();
         ctx.arc(sx, sy, c.size, 0, Math.PI * 2);
         ctx.fillStyle = c.color;
-        ctx.globalAlpha = 0.8;
+        ctx.globalAlpha = 0.6;
         ctx.fill();
 
-        // Collision Check
-        for (let j = 0; j < nodes.length; j++) {
+        // Collision Check - Optimized loop
+        for (let j = 0; j < nodeCount; j++) {
             const node = nodes[j];
             const dx = c.x - node.pos.x;
             const dy = c.y - node.pos.y;
@@ -98,19 +93,17 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
             const radius = node.size / 2;
             
             if (distSq < radius * radius) {
-                // Collision! 
                 audioEngine.triggerDisturbance(node.id, c.vy);
-                // Deflect catalyst slightly so it doesn't multi-trigger instantly
-                c.vx *= -1.05;
-                c.vy *= -1.05;
-                c.x += c.vx * 2;
-                c.y += c.vy * 2;
+                // Particle bounces and speeds up slightly
+                c.vx *= -1.1;
+                c.vy *= -1.1;
+                c.x += c.vx * 3;
+                c.y += c.vy * 3;
             }
         }
       }
     }
     
-    ctx.restore();
     requestRef.current = requestAnimationFrame(animate);
   };
 

@@ -141,7 +141,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
-  const [catalystDensity, setCatalystDensity] = useState(15);
+  const [catalystDensity, setCatalystDensity] = useState(30);
   
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const panStateRef = useRef<{ active: boolean, startX: number, startY: number, initialX: number, initialY: number }>({
@@ -632,7 +632,7 @@ const App: React.FC = () => {
                         
                         <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 block">Catalyst Flux ({catalystDensity})</label>
                         <input 
-                            type="range" min="0" max="200" value={catalystDensity} 
+                            type="range" min="0" max="1000" value={catalystDensity} 
                             onChange={(e) => setCatalystDensity(parseInt(e.target.value))}
                             className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
                         />
