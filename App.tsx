@@ -350,7 +350,7 @@ const App: React.FC = () => {
         setNodes(parsed.nodes);
         setConnections(parsed.connections);
         if (parsed.catalystDensity !== undefined) setCatalystDensity(parsed.catalystDensity);
-        if (parsed.impactSettings !== undefined) setImpactSettings(parsed.impactSettings);
+        if (parsed.impactSettings !== undefined) setImpactSettings(parsed.hydrationErrors);
         const theme = THEMES.find(t => t.id === parsed.themeId) || THEMES[0];
         setCurrentTheme(theme);
         if (isStarted) rebuildAudioEngine(parsed.nodes, parsed.connections);
@@ -380,7 +380,10 @@ const App: React.FC = () => {
             const h = window.innerHeight;
             applyFxParams(updated, w, h);
         }
-        if (updates.isAudible !== undefined) audioEngine.updateAudible(id, updates.isAudible);
+        if (updates.isAudible !== undefined) {
+          // This triggers dynamic switching between Audio mode and LFO mode in the engine
+          audioEngine.updateAudible(id, updates.isAudible);
+        }
         if (updates.size !== undefined) {
             const val = updated.size / 300;
             audioEngine.updateParam(id, updated.type === 'OSC' ? 'gain' : 'intensity', val);

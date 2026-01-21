@@ -128,7 +128,6 @@ class AudioEngine {
     panner.setPosition(pan, 0, 1 - Math.abs(pan));
     panner.connect(this.impactGain);
 
-    // ---PROTOCOL: SPARKS---
     if (settings.sparkTransients && this.noiseBuffer) {
       const noiseSource = this.ctx.createBufferSource();
       const noiseFilter = this.ctx.createBiquadFilter();
@@ -146,7 +145,6 @@ class AudioEngine {
       noiseSource.stop(now + 0.1);
     }
 
-    // ---PROTOCOL: SUB THUMP---
     if (settings.subThump) {
       const thump = this.ctx.createOscillator();
       const thumpEnv = this.ctx.createGain();
@@ -162,7 +160,6 @@ class AudioEngine {
       thump.stop(now + 0.3);
     }
 
-    // ---PROTOCOL: GLITCH SHRED---
     if (settings.glitchShred) {
       const glitch = this.ctx.createOscillator();
       const glitchEnv = this.ctx.createGain();
@@ -179,7 +176,6 @@ class AudioEngine {
       glitch.stop(now + 0.05);
     }
 
-    // ---PROTOCOL: ECHO SPLASH---
     if (settings.echoSplash) {
       const splashDelay = this.ctx.createDelay(1.0);
       const splashFeedback = this.ctx.createGain();
@@ -198,7 +194,6 @@ class AudioEngine {
       splashDelay.connect(splashEnv);
       splashEnv.connect(panner);
 
-      // Trigger the "Ping" into the delay
       const ping = this.ctx.createOscillator();
       ping.type = 'triangle';
       ping.frequency.setValueAtTime(2000, now);
@@ -207,7 +202,6 @@ class AudioEngine {
       ping.stop(now + 0.02);
     }
 
-    // --- MOLECULE HARMONIC DISTURBANCE ---
     if (settings.toneSpike && node.params.detune instanceof AudioParam) {
       const p = node.params.detune;
       const centsShift = -velocityY * 200; 
@@ -250,9 +244,7 @@ class AudioEngine {
         newNode.output.connect(gain);
     });
     node.outgoingSignalConnections.forEach(targetId => {
-        newNode.outgoingSignalConnections.add(targetId);
-        const target = this.nodes.get(targetId);
-        if (target?.input) newNode.output.connect(target.input);
+        this.connectNodes(id, targetId); // Reuse connect logic to handle conditional LFO/Audio routing
     });
   }
 
@@ -457,11 +449,22 @@ class AudioEngine {
     const node = this.nodes.get(id);
     if (!node || !this.masterGain) return;
     
+    const wasAudible = node.isAudiblePreference;
     node.isAudiblePreference = isAudible;
+    
     try { node.output.disconnect(this.masterGain); } catch(e) {}
     
     if (isAudible && node.outgoingSignalConnections.size === 0) {
       node.output.connect(this.masterGain);
+    }
+
+    // If auditability changed, we must re-evaluate OSC -> FX connections
+    // because silent OSCs shift from Audio process to Parameter modulation
+    if (wasAudible !== isAudible) {
+      node.outgoingSignalConnections.forEach(targetId => {
+        this.disconnectNodes(id, targetId);
+        this.connectNodes(id, targetId);
+      });
     }
   }
 
@@ -498,11 +501,28 @@ class AudioEngine {
 
     if (to.input) {
       from.outgoingSignalConnections.add(toId);
-      try { from.output.disconnect(this.masterGain!); } catch(e) {}
+      try { from.output.disconnect(this.masterGain!); } catch (e) {}
+
+      // ENHANCED MODULATION LOGIC:
+      // If the source is an OSC and it is NOT audible, it modulates the FX primary parameter instead of sending audio.
+      if (!from.isAudiblePreference && from.params.frequency) {
+        const primaryParam = this.getPrimaryFXParam(to);
+        if (primaryParam) {
+           const modGain = this.ctx.createGain();
+           // Standardized depth for FX modulation (scaled by molecule frequency/type)
+           modGain.gain.setValueAtTime(primaryParam.maxValue ? (primaryParam.maxValue - primaryParam.minValue) * 0.2 : 500, this.ctx.currentTime);
+           from.output.connect(modGain);
+           modGain.connect(primaryParam);
+           from.modGains.set(toId, modGain);
+           return; // Bypass normal audio connection
+        }
+      }
       
+      // Default: Audio processing
       from.output.connect(to.input);
       this.updateAudible(toId, to.isAudiblePreference);
     } else if (to.params.frequency && to.params.frequency instanceof AudioParam) {
+      // FM Synthesis (OSC -> OSC)
       const modGain = this.ctx.createGain();
       modGain.gain.setValueAtTime(400, this.ctx.currentTime);
       from.output.connect(modGain);
@@ -511,21 +531,35 @@ class AudioEngine {
     }
   }
 
+  private getPrimaryFXParam(node: any): AudioParam | null {
+    if (!node.params) return null;
+    const p = node.params;
+    // Hierarchy of what's "primary" for each FX
+    if (p.cutoff) return p.cutoff;
+    if (p.time) return p.time;
+    if (p.amount) return p.amount;
+    if (p.speed) return p.speed;
+    if (p.rate) return p.rate;
+    if (p.bits) return p.bits;
+    if (p.diffusion) return p.diffusion;
+    return null;
+  }
+
   public disconnectNodes(fromId: string, toId: string) {
     const from = this.nodes.get(fromId);
     const to = this.nodes.get(toId);
     if (!from || !to) return;
 
-    if (to.input) {
-      from.outgoingSignalConnections.delete(toId);
-      try { from.output.disconnect(to.input); } catch(e) {}
+    from.outgoingSignalConnections.delete(toId);
+    
+    // Check if it was a parameter modulation connection
+    const modGain = from.modGains.get(toId);
+    if (modGain) {
+      try { from.output.disconnect(modGain); modGain.disconnect(); } catch (e) {}
+      from.modGains.delete(toId);
+    } else if (to.input) {
+      try { from.output.disconnect(to.input); } catch (e) {}
       this.updateAudible(fromId, from.isAudiblePreference);
-    } else {
-      const modGain = from.modGains.get(toId);
-      if (modGain) {
-        try { from.output.disconnect(modGain); modGain.disconnect(); } catch(e) {}
-        from.modGains.delete(toId);
-      }
     }
   }
 
