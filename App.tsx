@@ -380,7 +380,9 @@ const App: React.FC = () => {
             const h = window.innerHeight;
             applyFxParams(updated, w, h);
         }
-        if (updates.isAudible !== undefined) audioEngine.updateAudible(id, updates.isAudible);
+        if (updates.isAudible !== undefined) {
+          audioEngine.updateAudible(id, updates.isAudible);
+        }
         if (updates.size !== undefined) {
             const val = updated.size / 300;
             audioEngine.updateParam(id, updated.type === 'OSC' ? 'gain' : 'intensity', val);
@@ -551,9 +553,11 @@ const App: React.FC = () => {
       onPointerUp={handlePointerUp}
     >
       <style>{`
-        body { font-family: ${currentTheme.colors.fontFamily}; }
+        body { font-family: ${currentTheme.colors.fontFamily}; color-scheme: dark; }
         .glass-panel { background: ${currentTheme.colors.sidebarBg}; }
         button { border-color: ${currentTheme.colors.accent}44; color: ${currentTheme.colors.buttonText}; }
+        select { background: #000; color: #fff; }
+        option { background: #111; color: #fff; }
       `}</style>
       
       <div className="fixed inset-0 pointer-events-none" style={{ background: currentTheme.colors.bgGlow, zIndex: -1 }} />

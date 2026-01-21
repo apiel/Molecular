@@ -3,8 +3,13 @@ import { OscType, FxType, ImpactSettings } from '../types';
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
-  private noiseBuffer: AudioBuffer | null = null;
   private impactGain: GainNode | null = null;
+  
+  // Spectral Buffers
+  private whiteBuffer: AudioBuffer | null = null;
+  private pinkBuffer: AudioBuffer | null = null;
+  private brownBuffer: AudioBuffer | null = null;
+
   private nodes: Map<string, { 
     main: AudioNode, 
     input?: AudioNode, 
@@ -13,7 +18,8 @@ class AudioEngine {
     modGains: Map<string, GainNode>,
     extraNodes?: { [key: string]: AudioNode },
     outgoingSignalConnections: Set<string>,
-    isAudiblePreference: boolean
+    isAudiblePreference: boolean,
+    noiseGains?: { b: GainNode, p: GainNode, w: GainNode } // For noise morphing
   }> = new Map();
   private isMuted: boolean = true; 
 
@@ -30,7 +36,7 @@ class AudioEngine {
       this.impactGain.gain.setValueAtTime(0.4, this.ctx.currentTime);
       this.impactGain.connect(this.masterGain);
 
-      this.createNoiseBuffer();
+      this.createNoiseBuffers();
     }
     
     if (this.ctx.state === 'suspended') {
@@ -38,15 +44,46 @@ class AudioEngine {
     }
   }
 
-  private createNoiseBuffer() {
+  private createNoiseBuffers() {
     if (!this.ctx) return;
     const bufferSize = this.ctx.sampleRate * 2;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = buffer.getChannelData(0);
+    
+    this.whiteBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    this.pinkBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    this.brownBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+
+    const wOut = this.whiteBuffer.getChannelData(0);
+    const pOut = this.pinkBuffer.getChannelData(0);
+    const bOut = this.brownBuffer.getChannelData(0);
+
+    // Pink Noise variables
+    let b0, b1, b2, b3, b4, b5, b6;
+    b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+
+    // Brown Noise variables
+    let lastOut = 0.0;
+
     for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
+      const white = Math.random() * 2 - 1;
+      
+      // White
+      wOut[i] = white;
+
+      // Pink (Voss-McCartney)
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      pOut[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+      pOut[i] *= 0.11; 
+      b6 = white * 0.115926;
+
+      // Brown
+      lastOut = (lastOut + (0.02 * white)) / 1.02;
+      bOut[i] = lastOut * 3.5;
     }
-    this.noiseBuffer = buffer;
   }
 
   public setMasterMute(muted: boolean) {
@@ -65,13 +102,38 @@ class AudioEngine {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(gain, this.ctx.currentTime);
 
+    let noiseGains;
+
     if (type === 'noise') {
-      const source = this.ctx.createBufferSource();
-      source.buffer = this.noiseBuffer;
-      source.loop = true;
-      source.start();
-      mainNode = source;
-      params = { frequency: { value: 0 }, gain: g.gain }; 
+      const brownSrc = this.ctx.createBufferSource();
+      const pinkSrc = this.ctx.createBufferSource();
+      const whiteSrc = this.ctx.createBufferSource();
+      
+      brownSrc.buffer = this.brownBuffer;
+      pinkSrc.buffer = this.pinkBuffer;
+      whiteSrc.buffer = this.whiteBuffer;
+
+      const gb = this.ctx.createGain();
+      const gp = this.ctx.createGain();
+      const gw = this.ctx.createGain();
+
+      [brownSrc, pinkSrc, whiteSrc].forEach(s => { s.loop = true; s.start(); });
+      
+      brownSrc.connect(gb);
+      pinkSrc.connect(gp);
+      whiteSrc.connect(gw);
+      
+      gb.connect(g);
+      gp.connect(g);
+      gw.connect(g);
+
+      noiseGains = { b: gb, p: gp, w: gw };
+      mainNode = g; 
+      params = { frequency: { value: freq }, gain: g.gain };
+      
+      // Initialize morph
+      this.updateNoiseMorph(noiseGains, freq);
+
     } else if (type === 'sample-hold') {
       const scriptNode = this.ctx.createScriptProcessor(256, 1, 1);
       let lastStepTime = 0;
@@ -92,6 +154,7 @@ class AudioEngine {
       };
       mainNode = scriptNode;
       params = { frequency: freqObj, gain: g.gain };
+      mainNode.connect(g);
     } else {
       const osc = this.ctx.createOscillator();
       osc.type = type as OscillatorType;
@@ -99,9 +162,8 @@ class AudioEngine {
       osc.start();
       mainNode = osc;
       params = { frequency: osc.frequency, gain: g.gain, detune: osc.detune };
+      mainNode.connect(g);
     }
-    
-    mainNode.connect(g);
 
     this.nodes.set(id, {
       main: mainNode,
@@ -109,10 +171,31 @@ class AudioEngine {
       params,
       modGains: new Map(),
       outgoingSignalConnections: new Set(),
-      isAudiblePreference: isAudible
+      isAudiblePreference: isAudible,
+      noiseGains
     });
 
     this.updateAudible(id, isAudible);
+  }
+
+  private updateNoiseMorph(gains: { b: GainNode, p: GainNode, w: GainNode }, freq: number) {
+    // Frequency typically ranges 0-2000. Let's normalize it for the morph.
+    const t = Math.min(1, Math.max(0, freq / 2000));
+    const now = this.ctx!.currentTime;
+
+    if (t < 0.5) {
+      // Morph between Brown and Pink
+      const mix = t * 2; // 0 to 1
+      gains.b.gain.setTargetAtTime(1 - mix, now, 0.05);
+      gains.p.gain.setTargetAtTime(mix, now, 0.05);
+      gains.w.gain.setTargetAtTime(0, now, 0.05);
+    } else {
+      // Morph between Pink and White
+      const mix = (t - 0.5) * 2; // 0 to 1
+      gains.b.gain.setTargetAtTime(0, now, 0.05);
+      gains.p.gain.setTargetAtTime(1 - mix, now, 0.05);
+      gains.w.gain.setTargetAtTime(mix, now, 0.05);
+    }
   }
 
   public triggerDisturbance(id: string, velocityY: number, pan: number, settings: ImpactSettings) {
@@ -128,12 +211,11 @@ class AudioEngine {
     panner.setPosition(pan, 0, 1 - Math.abs(pan));
     panner.connect(this.impactGain);
 
-    // ---PROTOCOL: SPARKS---
-    if (settings.sparkTransients && this.noiseBuffer) {
+    if (settings.sparkTransients && this.whiteBuffer) {
       const noiseSource = this.ctx.createBufferSource();
       const noiseFilter = this.ctx.createBiquadFilter();
       const noiseEnv = this.ctx.createGain();
-      noiseSource.buffer = this.noiseBuffer;
+      noiseSource.buffer = this.whiteBuffer;
       noiseFilter.type = 'highpass';
       noiseFilter.frequency.setValueAtTime(isFalling ? 2000 : 5000, now);
       noiseEnv.gain.setValueAtTime(0, now);
@@ -146,7 +228,6 @@ class AudioEngine {
       noiseSource.stop(now + 0.1);
     }
 
-    // ---PROTOCOL: SUB THUMP---
     if (settings.subThump) {
       const thump = this.ctx.createOscillator();
       const thumpEnv = this.ctx.createGain();
@@ -162,7 +243,6 @@ class AudioEngine {
       thump.stop(now + 0.3);
     }
 
-    // ---PROTOCOL: GLITCH SHRED---
     if (settings.glitchShred) {
       const glitch = this.ctx.createOscillator();
       const glitchEnv = this.ctx.createGain();
@@ -179,7 +259,6 @@ class AudioEngine {
       glitch.stop(now + 0.05);
     }
 
-    // ---PROTOCOL: ECHO SPLASH---
     if (settings.echoSplash) {
       const splashDelay = this.ctx.createDelay(1.0);
       const splashFeedback = this.ctx.createGain();
@@ -198,7 +277,6 @@ class AudioEngine {
       splashDelay.connect(splashEnv);
       splashEnv.connect(panner);
 
-      // Trigger the "Ping" into the delay
       const ping = this.ctx.createOscillator();
       ping.type = 'triangle';
       ping.frequency.setValueAtTime(2000, now);
@@ -207,7 +285,6 @@ class AudioEngine {
       ping.stop(now + 0.02);
     }
 
-    // --- MOLECULE HARMONIC DISTURBANCE ---
     if (settings.toneSpike && node.params.detune instanceof AudioParam) {
       const p = node.params.detune;
       const centsShift = -velocityY * 200; 
@@ -241,7 +318,7 @@ class AudioEngine {
     const currentFreq = typeof currentParams.frequency?.value === 'number' ? currentParams.frequency.value : 440;
     const currentGain = typeof currentParams.gain?.value === 'number' ? currentParams.gain.value : 0.1;
     const currentAudible = node.isAudiblePreference;
-    try { node.main.disconnect(); } catch (e) {}
+    try { node.output.disconnect(); } catch (e) {}
     if ('stop' in node.main) (node.main as any).stop();
     this.createOscillator(id, type, currentFreq, currentGain, currentAudible);
     const newNode = this.nodes.get(id)!;
@@ -250,9 +327,7 @@ class AudioEngine {
         newNode.output.connect(gain);
     });
     node.outgoingSignalConnections.forEach(targetId => {
-        newNode.outgoingSignalConnections.add(targetId);
-        const target = this.nodes.get(targetId);
-        if (target?.input) newNode.output.connect(target.input);
+        this.connectNodes(id, targetId); 
     });
   }
 
@@ -457,11 +532,20 @@ class AudioEngine {
     const node = this.nodes.get(id);
     if (!node || !this.masterGain) return;
     
+    const wasAudible = node.isAudiblePreference;
     node.isAudiblePreference = isAudible;
+    
     try { node.output.disconnect(this.masterGain); } catch(e) {}
     
     if (isAudible && node.outgoingSignalConnections.size === 0) {
       node.output.connect(this.masterGain);
+    }
+
+    if (wasAudible !== isAudible) {
+      node.outgoingSignalConnections.forEach(targetId => {
+        this.disconnectNodes(id, targetId);
+        this.connectNodes(id, targetId);
+      });
     }
   }
 
@@ -481,6 +565,11 @@ class AudioEngine {
         return;
     }
 
+    // Morph noise if frequency is changed on a noise node
+    if (paramName === 'frequency' && node.noiseGains) {
+      this.updateNoiseMorph(node.noiseGains, value);
+    }
+
     const param = node.params[paramName];
     if (param) {
       if (param instanceof AudioParam) {
@@ -498,7 +587,19 @@ class AudioEngine {
 
     if (to.input) {
       from.outgoingSignalConnections.add(toId);
-      try { from.output.disconnect(this.masterGain!); } catch(e) {}
+      try { from.output.disconnect(this.masterGain!); } catch (e) {}
+
+      if (!from.isAudiblePreference && from.params.frequency) {
+        const primaryParam = this.getPrimaryFXParam(to);
+        if (primaryParam) {
+           const modGain = this.ctx.createGain();
+           modGain.gain.setValueAtTime(primaryParam.maxValue ? (primaryParam.maxValue - primaryParam.minValue) * 0.2 : 500, this.ctx.currentTime);
+           from.output.connect(modGain);
+           modGain.connect(primaryParam);
+           from.modGains.set(toId, modGain);
+           return; 
+        }
+      }
       
       from.output.connect(to.input);
       this.updateAudible(toId, to.isAudiblePreference);
@@ -511,21 +612,33 @@ class AudioEngine {
     }
   }
 
+  private getPrimaryFXParam(node: any): AudioParam | null {
+    if (!node.params) return null;
+    const p = node.params;
+    if (p.cutoff) return p.cutoff;
+    if (p.time) return p.time;
+    if (p.amount) return p.amount;
+    if (p.speed) return p.speed;
+    if (p.rate) return p.rate;
+    if (p.bits) return p.bits;
+    if (p.diffusion) return p.diffusion;
+    return null;
+  }
+
   public disconnectNodes(fromId: string, toId: string) {
     const from = this.nodes.get(fromId);
     const to = this.nodes.get(toId);
     if (!from || !to) return;
 
-    if (to.input) {
-      from.outgoingSignalConnections.delete(toId);
-      try { from.output.disconnect(to.input); } catch(e) {}
+    from.outgoingSignalConnections.delete(toId);
+    
+    const modGain = from.modGains.get(toId);
+    if (modGain) {
+      try { from.output.disconnect(modGain); modGain.disconnect(); } catch (e) {}
+      from.modGains.delete(toId);
+    } else if (to.input) {
+      try { from.output.disconnect(to.input); } catch (e) {}
       this.updateAudible(fromId, from.isAudiblePreference);
-    } else {
-      const modGain = from.modGains.get(toId);
-      if (modGain) {
-        try { from.output.disconnect(modGain); modGain.disconnect(); } catch(e) {}
-        from.modGains.delete(toId);
-      }
     }
   }
 
