@@ -137,11 +137,11 @@ const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false); 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Desktop Sidebar open by default
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
   
-  // Workspace navigation (Panning)
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const panStateRef = useRef<{ active: boolean, startX: number, startY: number, initialX: number, initialY: number }>({
     active: false, startX: 0, startY: 0, initialX: 0, initialY: 0
@@ -154,7 +154,6 @@ const App: React.FC = () => {
   const getCanvasWidth = useCallback(() => {
     if (!containerRef.current) return window.innerWidth;
     const isMobile = window.innerWidth < 1024;
-    // For calculation of frequency bounds, we use the visual width minus sidebar if docked
     return (isMobile || !isSidebarOpen) ? window.innerWidth : window.innerWidth - 320;
   }, [isSidebarOpen]);
 
@@ -259,7 +258,7 @@ const App: React.FC = () => {
       setIsStarted(true);
       rebuildAudioEngine(nodes, connections);
     } else {
-      audioEngine.init(); // Re-trigger resume on every gesture
+      audioEngine.init();
     }
   }, [isStarted, nodes, connections, rebuildAudioEngine]);
 
@@ -268,7 +267,6 @@ const App: React.FC = () => {
     const id = uuidv4();
     const w = getCanvasWidth();
     const h = window.innerHeight;
-    // New nodes appear relative to the current view offset
     const worldX = 100 + Math.random() * (w - 200) - viewOffset.x;
     const worldY = 100 + Math.random() * (h - 200) - viewOffset.y;
     const freq = xToFreq(worldX, w);
@@ -293,7 +291,6 @@ const App: React.FC = () => {
         audioEngine.updateAudible(id, true);
     }
     setSelectedId(id);
-    // Removed auto-open sidebar here
   };
 
   const toggleTransport = () => {
@@ -394,7 +391,6 @@ const App: React.FC = () => {
     setNodes(prev => prev.filter(n => n.id !== id));
     audioEngine.removeNode(id);
     setSelectedId(null);
-    if (window.innerWidth < 1024) setIsSidebarOpen(false);
   }, [connections]);
 
   const deleteConnection = useCallback((id: string) => {
@@ -404,7 +400,6 @@ const App: React.FC = () => {
         return prev.filter(c => c.id !== id);
     });
     setSelectedConnectionId(null);
-    if (window.innerWidth < 1024) setIsSidebarOpen(false);
   }, []);
 
   useEffect(() => {
@@ -430,9 +425,7 @@ const App: React.FC = () => {
         setSelectedId(null);
         setSelectedConnectionId(null);
         setIsMenuOpen(false);
-        if (window.innerWidth < 1024) setIsSidebarOpen(false);
         
-        // Start background panning
         panStateRef.current = {
           active: true,
           startX: e.clientX,
@@ -460,7 +453,6 @@ const App: React.FC = () => {
     setNodes(prev => {
       const node = prev.find(n => n.id === id);
       if (node) {
-        // Offset drag to account for panning
         dragStateRef.current = { 
           id, 
           offsetX: e.clientX - (node.pos.x + viewOffset.x), 
@@ -475,7 +467,6 @@ const App: React.FC = () => {
   }, [isConnecting, isBinding, selectedId, startAudio, viewOffset]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    // Handling Pan
     if (panStateRef.current.active) {
       const dx = e.clientX - panStateRef.current.startX;
       const dy = e.clientY - panStateRef.current.startY;
@@ -486,7 +477,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Handling Molecule Drag
     if (!dragStateRef.current) return;
     const { id, offsetX, offsetY } = dragStateRef.current;
     setNodes(prev => {
@@ -495,11 +485,8 @@ const App: React.FC = () => {
         
         const canvasW = getCanvasWidth();
         const h = window.innerHeight;
-        
         let newScreenX = e.clientX - offsetX;
         let newScreenY = e.clientY - offsetY;
-        
-        // World coordinates are Screen - Offset
         let newWorldX = newScreenX - viewOffset.x;
         let newWorldY = newScreenY - viewOffset.y;
         
@@ -541,6 +528,8 @@ const App: React.FC = () => {
     color: currentTheme.colors.buttonText
   }), [currentTheme]);
 
+  const canvasWidth = getCanvasWidth();
+
   return (
     <div 
       className="flex h-screen w-screen overflow-hidden relative" 
@@ -572,6 +561,12 @@ const App: React.FC = () => {
             </filter>
           </defs>
           <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)` }}>
+            {/* World boundary line */}
+            <line 
+                x1={canvasWidth / 3} y1={-10000} x2={canvasWidth / 3} y2={10000} 
+                stroke="white" strokeWidth="1" strokeOpacity="0.05" strokeDasharray="10,10" 
+            />
+
             {connections.map((conn) => {
               const from = nodes.find(n => n.id === conn.fromId);
               const to = nodes.find(n => n.id === conn.toId);
@@ -587,9 +582,7 @@ const App: React.FC = () => {
                    onMouseLeave={() => setHoveredConnectionId(null)}>
                   <path d={d} stroke="transparent" strokeWidth="30" className="cursor-pointer" fill="none" />
                   {(isSel || isHov) && <path d={d} stroke={currentTheme.colors.accent} strokeWidth={isSel ? "8" : "6"} strokeOpacity="0.3" filter="url(#glow)" fill="none" />}
-                  {/* Fixed 'W' error by replacing it with 'isFM' */}
                   <path d={d} stroke={isSel ? currentTheme.colors.accent : "url(#signalGrad)"} strokeWidth={isSel ? "5" : "2"} strokeDasharray={isFM?"2,2":"10,5"} className={`transition-all ${hoveredConnectionId === conn.id ? 'opacity-100' : 'opacity-60'}`} fill="none" />
-                  {/* Fixed 'W' error by replacing it with 'isFM' */}
                   <circle r="3" fill="#fff" filter="blur(1px)"><animateMotion dur={isFM?"0.8s":"2s"} repeatCount="indefinite" path={d} /></circle>
                 </g>
               );
@@ -598,8 +591,13 @@ const App: React.FC = () => {
         </svg>
 
         <div style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)` }}>
+          <div className="absolute" style={{ left: canvasWidth / 3, top: 0, height: '200vh', width: 200, pointerEvents: 'none' }}>
+            <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr] absolute bottom-0 left-4">
+               World Depth Spectrum (0-20Hz)
+            </div>
+          </div>
           {nodes.map(node => (
-            <Bubble key={node.id} node={node} isSelected={selectedId === node.id} isConnecting={isConnecting || isBinding} hasIncoming={connections.some(c => c.toId === node.id)} theme={currentTheme} onMouseDown={handlePointerDownBubble} onSelect={(id) => { setSelectedId(id); }} />
+            <Bubble key={node.id} node={node} isSelected={selectedId === node.id} isConnecting={isConnecting || isBinding} hasIncoming={connections.some(c => c.toId === node.id)} theme={currentTheme} onMouseDown={handlePointerDownBubble} onSelect={setSelectedId} />
           ))}
         </div>
 
@@ -615,7 +613,7 @@ const App: React.FC = () => {
             </button>
         </div>
 
-        {/* Right Corner Menu - Burger Button Fixed Positioning */}
+        {/* Right Corner Menu */}
         <div className="absolute top-4 sm:top-8 right-4 sm:right-8 z-30">
             <button onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ background: currentTheme.colors.buttonBg }} className="w-10 h-10 flex items-center justify-center rounded-full border border-white/20 backdrop-blur-md hover:bg-white/10 transition-all active:scale-90 shadow-2xl">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -624,7 +622,6 @@ const App: React.FC = () => {
                 <div className="absolute top-12 right-0 w-56 bg-black/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-[0_20px_50px_rgba(0,0,0,1)] z-50 animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b border-white/5 mb-1">
                         <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 block">Atmosphere</label>
-                        {/* Fixed 'R' error by replacing it with 'setCurrentTheme' */}
                         <select value={currentTheme.id} onChange={(e) => { const theme = THEMES.find(t => t.id === e.target.value); if (theme) setCurrentTheme(theme); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white outline-none cursor-pointer">
                             {THEMES.map(t => <option key={t.id} value={t.id} className="bg-black text-white">{t.name}</option>)}
                         </select>
@@ -638,20 +635,18 @@ const App: React.FC = () => {
             )}
         </div>
 
-        <div className="absolute inset-y-0 left-0 w-1/3 border-r border-white/5 pointer-events-none z-10 flex flex-col justify-end p-8">
-          <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr]">World Depth Spectrum (0-20Hz)</div>
-        </div>
-
         {(isConnecting || isBinding) && (
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-2xl px-6 sm:px-12 py-3 sm:py-4 rounded-full border border-white/20 text-[9px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] animate-pulse z-50 shadow-2xl text-center">
                 {isConnecting ? 'Select Signal Sink (Esc to cancel)' : 'Select Binding Parent (Esc to cancel)'}
             </div>
         )}
 
-        {/* Sidebar Toggle Tab */}
-        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={{ background: isSidebarOpen ? currentTheme.colors.accent : 'rgba(0,0,0,0.4)', color: isSidebarOpen ? '#000' : '#fff' }} className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-32 flex items-center justify-center rounded-l-2xl border-l border-t border-b border-white/20 backdrop-blur-md z-30 transition-all hover:w-10 active:scale-95 group">
-            <div className={`transition-transform duration-300 ${isSidebarOpen ? 'rotate-180' : 'rotate-0'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg></div>
-        </button>
+        {/* Sidebar Toggle Tab - Only show if closed */}
+        {!isSidebarOpen && (
+            <button onClick={() => setIsSidebarOpen(true)} style={{ background: 'rgba(0,0,0,0.4)', color: '#fff' }} className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-32 flex items-center justify-center rounded-l-2xl border-l border-t border-b border-white/20 backdrop-blur-md z-30 transition-all hover:w-10 active:scale-95 group">
+                <div className="transition-transform duration-300 rotate-0"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg></div>
+            </button>
+        )}
       </div>
 
       <Sidebar selectedNode={nodes.find(n => n.id === selectedId) || null} theme={currentTheme} isOpen={isSidebarOpen} onUpdate={updateNode} onDelete={deleteNode} onUnbind={(id) => updateNode(id, { boundTo: undefined })} onClose={() => setIsSidebarOpen(false)} selectedConnectionId={selectedConnectionId} onDeleteConnection={deleteConnection} />

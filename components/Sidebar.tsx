@@ -42,7 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <>
           <div className="flex justify-between items-center lg:block">
             <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">Flux Link</h2>
-            <button onClick={onClose} className="lg:hidden p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg">CLOSE</button>
+            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg">CLOSE</button>
           </div>
           <div className="p-4 bg-white/5 rounded-xl border border-white/10">
               <p className="text-[10px] opacity-50 uppercase font-black tracking-widest mb-4 leading-relaxed">
@@ -101,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{selectedNode.type}</h2>
                 <span className="text-[10px] opacity-30 font-mono block mt-2 tracking-widest">{selectedNode.id.slice(0, 12)}</span>
             </div>
-            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg lg:hidden">CLOSE</button>
+            <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg">CLOSE</button>
           </header>
 
           <section className="space-y-6 flex-1">
@@ -152,11 +152,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <option value="filter-lp">LP Filter</option>
                         <option value="filter-hp">HP Filter</option>
                         <option value="delay">Echo Delay</option>
-                        <option value="distortion">Hard Clipping</option>
-                        <option value="reverb">Ghost Reverb</option>
+                        <option value="distortion">Hard Distortion</option>
+                        <option value="reverb">Space Reverb</option>
                         <option value="phaser">Liquid Phaser</option>
-                        <option value="chorus">Thick Chorus</option>
-                        <option value="tremolo">Vibrato</option>
+                        <option value="chorus">Deep Chorus</option>
+                        <option value="tremolo">Wave Tremolo</option>
                         <option value="bitcrusher">Degrade</option>
                     </>
                     )}
@@ -211,7 +211,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     Deconstruct Molecule
                 </button>
             </div>
-            <button onClick={onClose} className="w-full py-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all lg:hidden">
+            <button onClick={onClose} className="w-full py-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all">
               Return to Space
             </button>
           </section>
