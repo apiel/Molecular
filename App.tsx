@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { SynthNode, Position, Connection, NodeType, Theme } from './types';
+import { SynthNode, Position, Connection, NodeType, Theme, ImpactSettings } from './types';
 import { Bubble } from './components/Bubble';
 import { Sidebar } from './components/Sidebar';
+import { CatalystField } from './components/CatalystField';
 import { audioEngine } from './services/audioEngine';
 
 const STORAGE_KEY = 'molecular_synth_v1';
-
 const MIN_FREQ = 0;
 const MID_FREQ = 20;
 const MAX_FREQ = 2000;
@@ -23,7 +23,7 @@ const THEMES: Theme[] = [
       connStart: '#818cf8',
       connEnd: '#34d399',
       bgGlow: 'radial-gradient(circle at 30% 30%, #0a0a1a 0%, #020205 100%)',
-      sidebarBg: 'rgba(10, 10, 20, 0.9)',
+      sidebarBg: 'rgba(10, 10, 20, 0.95)',
       accent: '#4f46e5',
       buttonBg: 'rgba(255, 255, 255, 0.05)',
       buttonText: '#ffffff',
@@ -41,7 +41,7 @@ const THEMES: Theme[] = [
       connStart: '#ff00ff',
       connEnd: '#00ffff',
       bgGlow: 'radial-gradient(circle at 50% 50%, #1a001a 0%, #000000 100%)',
-      sidebarBg: 'rgba(0, 0, 0, 0.95)',
+      sidebarBg: 'rgba(0, 0, 0, 0.98)',
       accent: '#ff00ff',
       buttonBg: 'rgba(0, 255, 255, 0.1)',
       buttonText: '#00ffff',
@@ -77,7 +77,7 @@ const THEMES: Theme[] = [
       connStart: '#fb923c',
       connEnd: '#f43f5e',
       bgGlow: 'radial-gradient(circle at 70% 20%, #2e0505 0%, #050505 100%)',
-      sidebarBg: 'rgba(20, 5, 5, 0.9)',
+      sidebarBg: 'rgba(20, 5, 5, 0.95)',
       accent: '#f97316',
       buttonBg: 'rgba(249, 115, 22, 0.1)',
       buttonText: '#fdba74',
@@ -95,45 +95,6 @@ const xToFreq = (x: number, width: number) => {
     const t = Math.max(0, (x - oneThird) / (2 * oneThird));
     return MID_FREQ + t * (MAX_FREQ - MID_FREQ);
   }
-};
-
-const freqToX = (freq: number, width: number) => {
-  const oneThird = width / 3;
-  if (freq <= MID_FREQ) {
-    return (freq / MID_FREQ) * oneThird;
-  } else {
-    const t = (freq - MID_FREQ) / (MAX_FREQ - MID_FREQ);
-    return oneThird + t * (2 * oneThird);
-  }
-};
-
-const getDefaultNodes = (width: number, height: number): SynthNode[] => {
-  const id1 = uuidv4();
-  const id2 = uuidv4();
-  return [
-    {
-      id: id1,
-      type: 'OSC',
-      subType: 'sine',
-      pos: { x: freqToX(70, width), y: height / 2 - 50 },
-      size: 140,
-      frequency: 70,
-      modulators: [],
-      color: THEMES[0].colors.oscStart,
-      isAudible: true
-    },
-    {
-      id: id2,
-      type: 'OSC',
-      subType: 'sine',
-      pos: { x: freqToX(7, width), y: height / 2 + 100 },
-      size: 100,
-      frequency: 7,
-      modulators: [],
-      color: THEMES[0].colors.oscStart,
-      isAudible: false
-    }
-  ];
 };
 
 const App: React.FC = () => {
@@ -177,17 +138,65 @@ const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false); 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
+  const [catalystDensity, setCatalystDensity] = useState(30);
+  const [impactSettings, setImpactSettings] = useState<ImpactSettings>({
+    toneSpike: true,
+    sparkTransients: true,
+    paramFlutter: true,
+    subThump: true,
+    glitchShred: false,
+    echoSplash: false,
+    filterWarp: true
+  });
   
+  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
+  const panStateRef = useRef<{ active: boolean, startX: number, startY: number, initialX: number, initialY: number }>({
+    active: false, startX: 0, startY: 0, initialX: 0, initialY: 0
+  });
+
   const dragStateRef = useRef<{ id: string, offsetX: number, offsetY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getCanvasWidth = useCallback(() => {
+    if (!containerRef.current) return window.innerWidth;
+    const isMobile = window.innerWidth < 1024;
+    return (isMobile || !isSidebarOpen) ? window.innerWidth : window.innerWidth - 320;
+  }, [isSidebarOpen]);
+
   useEffect(() => {
     if (nodes.length === 0) {
-      const w = window.innerWidth - 320;
+      const w = getCanvasWidth();
       const h = window.innerHeight;
-      const defaults = getDefaultNodes(w, h);
+      const id1 = uuidv4();
+      const id2 = uuidv4();
+      const defaults: SynthNode[] = [
+        {
+          id: id1,
+          type: 'OSC',
+          subType: 'sine',
+          pos: { x: w * 0.4, y: h / 2 - 50 },
+          size: 140,
+          frequency: xToFreq(w * 0.4, w),
+          modulators: [],
+          color: currentTheme.colors.oscStart,
+          isAudible: true
+        },
+        {
+          id: id2,
+          type: 'OSC',
+          subType: 'sine',
+          pos: { x: w * 0.1, y: h / 2 + 100 },
+          size: 100,
+          frequency: xToFreq(w * 0.1, w),
+          modulators: [],
+          color: currentTheme.colors.oscStart,
+          isAudible: false
+        }
+      ];
       setNodes(defaults);
       setConnections([{
         id: uuidv4(),
@@ -198,13 +207,9 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const state = {
-      nodes,
-      connections,
-      themeId: currentTheme.id
-    };
+    const state = { nodes, connections, themeId: currentTheme.id, catalystDensity, impactSettings };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [nodes, connections, currentTheme]);
+  }, [nodes, connections, currentTheme, catalystDensity, impactSettings]);
 
   const applyFxParams = useCallback((node: SynthNode, w: number, h: number) => {
     const id = node.id;
@@ -236,6 +241,7 @@ const App: React.FC = () => {
   }, []);
 
   const rebuildAudioEngine = useCallback((nodesToBuild: SynthNode[], connsToBuild: Connection[]) => {
+    audioEngine.init();
     nodesToBuild.forEach(node => {
       if (node.type === 'OSC') {
         audioEngine.createOscillator(node.id, node.subType as any, node.frequency, node.size / 300, node.isAudible);
@@ -245,7 +251,7 @@ const App: React.FC = () => {
       }
     });
 
-    const w = window.innerWidth - 320;
+    const w = getCanvasWidth();
     const h = window.innerHeight;
     nodesToBuild.forEach(node => {
       if (node.type === 'FX') applyFxParams(node, w, h);
@@ -254,28 +260,32 @@ const App: React.FC = () => {
     connsToBuild.forEach(conn => {
       audioEngine.connectNodes(conn.fromId, conn.toId);
     });
-  }, [applyFxParams]);
+  }, [applyFxParams, getCanvasWidth]);
 
   const startAudio = useCallback(() => {
-    if (isStarted) return;
-    audioEngine.init();
-    setIsStarted(true);
-    rebuildAudioEngine(nodes, connections);
+    if (!isStarted) {
+      audioEngine.init();
+      setIsStarted(true);
+      rebuildAudioEngine(nodes, connections);
+    } else {
+      audioEngine.init();
+    }
   }, [isStarted, nodes, connections, rebuildAudioEngine]);
 
   const addNode = (type: NodeType) => {
-    if (!isStarted) startAudio();
+    startAudio();
     const id = uuidv4();
-    const w = window.innerWidth - 320;
+    const w = getCanvasWidth();
     const h = window.innerHeight;
-    const x = 100 + Math.random() * (w - 200);
-    const y = 100 + Math.random() * (h - 200);
-    const freq = xToFreq(x, w);
+    const worldX = 100 + Math.random() * (w - 200) - viewOffset.x;
+    const worldY = 100 + Math.random() * (h - 200) - viewOffset.y;
+    const freq = xToFreq(worldX, w);
+    
     const newNode: SynthNode = {
       id,
       type,
       subType: type === 'OSC' ? 'sine' : 'filter-lp',
-      pos: { x, y },
+      pos: { x: worldX, y: worldY },
       size: 110,
       frequency: freq,
       modulators: [],
@@ -294,7 +304,7 @@ const App: React.FC = () => {
   };
 
   const toggleTransport = () => {
-    if (!isStarted) startAudio();
+    startAudio();
     const nextPlaying = !isPlaying;
     setIsPlaying(nextPlaying);
     audioEngine.setMasterMute(!nextPlaying);
@@ -312,12 +322,7 @@ const App: React.FC = () => {
   };
 
   const handleExport = () => {
-    const state = {
-      nodes,
-      connections,
-      themeId: currentTheme.id,
-      exportedAt: new Date().toISOString()
-    };
+    const state = { nodes, connections, themeId: currentTheme.id, catalystDensity, impactSettings, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -325,38 +330,33 @@ const App: React.FC = () => {
     a.download = `molecular-patch-${new Date().getTime()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    setIsMenuOpen(false);
   };
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
+    setIsMenuOpen(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         if (!parsed.nodes || !parsed.connections) throw new Error('Invalid format');
-
         nodes.forEach(n => audioEngine.removeNode(n.id));
-
         setNodes(parsed.nodes);
         setConnections(parsed.connections);
+        if (parsed.catalystDensity !== undefined) setCatalystDensity(parsed.catalystDensity);
+        if (parsed.impactSettings !== undefined) setImpactSettings(parsed.impactSettings);
         const theme = THEMES.find(t => t.id === parsed.themeId) || THEMES[0];
         setCurrentTheme(theme);
-        
-        if (isStarted) {
-          rebuildAudioEngine(parsed.nodes, parsed.connections);
-        }
-        
+        if (isStarted) rebuildAudioEngine(parsed.nodes, parsed.connections);
         setSelectedId(null);
         setSelectedConnectionId(null);
-      } catch (err) {
-        alert('Failed to import patch: Invalid file format');
-      }
+      } catch (err) { alert('Failed to import patch: Invalid file format'); }
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -376,7 +376,7 @@ const App: React.FC = () => {
                     audioEngine.connectNodes(conn.fromId, conn.toId);
                 }
             });
-            const w = window.innerWidth - 320;
+            const w = getCanvasWidth();
             const h = window.innerHeight;
             applyFxParams(updated, w, h);
         }
@@ -392,14 +392,13 @@ const App: React.FC = () => {
       }
       return n;
     }));
-  }, [connections, applyFxParams]);
+  }, [connections, applyFxParams, getCanvasWidth]);
 
   const deleteNode = useCallback((id: string) => {
     const connectionsToRemove = connections.filter(c => c.fromId === id || c.toId === id);
     connectionsToRemove.forEach(c => {
       audioEngine.disconnectNodes(c.fromId, c.toId);
     });
-
     setConnections(prev => prev.filter(c => c.fromId !== id && c.toId !== id));
     setNodes(prev => prev.filter(n => n.id !== id));
     audioEngine.removeNode(id);
@@ -424,14 +423,33 @@ const App: React.FC = () => {
       if (e.key === 'Escape') {
         setIsConnecting(false);
         setIsBinding(false);
+        setSelectedId(null);
+        setSelectedConnectionId(null);
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [selectedId, selectedConnectionId, deleteNode, deleteConnection]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, id: string) => {
-    if (!isStarted) startAudio();
+  const handlePointerDownContainer = (e: React.PointerEvent) => {
+    startAudio();
+    if (e.target === containerRef.current || (e.target as any).tagName === 'svg') {
+        setSelectedId(null);
+        setSelectedConnectionId(null);
+        setIsMenuOpen(false);
+        
+        panStateRef.current = {
+          active: true,
+          startX: e.clientX,
+          startY: e.clientY,
+          initialX: viewOffset.x,
+          initialY: viewOffset.y
+        };
+    }
+  };
+
+  const handlePointerDownBubble = useCallback((e: React.PointerEvent, id: string) => {
+    startAudio();
     setSelectedConnectionId(null);
     if (isConnecting && selectedId && selectedId !== id) {
         audioEngine.connectNodes(selectedId, id);
@@ -449,54 +467,71 @@ const App: React.FC = () => {
       if (node) {
         dragStateRef.current = { 
           id, 
-          offsetX: e.clientX - node.pos.x, 
-          offsetY: e.clientY - node.pos.y 
+          offsetX: e.clientX - (node.pos.x + viewOffset.x), 
+          offsetY: e.clientY - (node.pos.y + viewOffset.y) 
         };
       }
       return prev;
     });
-  }, [isConnecting, isBinding, selectedId, isStarted, startAudio]);
+    // @ts-ignore
+    e.target.setPointerCapture(e.pointerId);
+    setSelectedId(id);
+  }, [isConnecting, isBinding, selectedId, startAudio, viewOffset]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (panStateRef.current.active) {
+      const dx = e.clientX - panStateRef.current.startX;
+      const dy = e.clientY - panStateRef.current.startY;
+      setViewOffset({
+        x: panStateRef.current.initialX + dx,
+        y: panStateRef.current.initialY + dy
+      });
+      return;
+    }
+
     if (!dragStateRef.current) return;
     const { id, offsetX, offsetY } = dragStateRef.current;
     setNodes(prev => {
         const draggedNodeOrig = prev.find(n => n.id === id);
         if (!draggedNodeOrig) return prev;
-        const w = window.innerWidth;
+        
+        const canvasW = getCanvasWidth();
         const h = window.innerHeight;
-        const halfSize = draggedNodeOrig.size / 2;
-        let newX = e.clientX - offsetX;
-        let newY = e.clientY - offsetY;
-        newX = Math.max(halfSize, Math.min(w - 320 - halfSize, newX));
-        newY = Math.max(halfSize, Math.min(h - halfSize, newY));
-        const shiftX = newX - draggedNodeOrig.pos.x;
-        const shiftY = newY - draggedNodeOrig.pos.y;
+        let newScreenX = e.clientX - offsetX;
+        let newScreenY = e.clientY - offsetY;
+        let newWorldX = newScreenX - viewOffset.x;
+        let newWorldY = newScreenY - viewOffset.y;
+        
+        const shiftX = newWorldX - draggedNodeOrig.pos.x;
+        const shiftY = newWorldY - draggedNodeOrig.pos.y;
+        
         return prev.map(n => {
             const isDragged = n.id === id;
             const isBound = n.boundTo === id;
             if (!isDragged && !isBound) return n;
+            
             let updatedPos = isDragged 
-              ? { x: newX, y: newY }
+              ? { x: newWorldX, y: newWorldY }
               : { x: n.pos.x + shiftX, y: n.pos.y + shiftY };
-            const nHalfSize = n.size / 2;
-            updatedPos.x = Math.max(nHalfSize, Math.min(w - 320 - nHalfSize, updatedPos.x));
-            updatedPos.y = Math.max(nHalfSize, Math.min(h - nHalfSize, updatedPos.y));
+            
             const updatedNode = { ...n, pos: updatedPos };
             if (n.type === 'OSC') {
-                const freq = xToFreq(updatedPos.x, w - 320);
+                const freq = xToFreq(updatedPos.x, canvasW);
                 audioEngine.updateParam(n.id, 'frequency', freq);
                 updatedNode.frequency = freq;
             } else {
-                applyFxParams(updatedNode, w - 320, h);
+                applyFxParams(updatedNode, canvasW, h);
             }
             return updatedNode;
         });
     });
-  }, [applyFxParams]);
+  }, [applyFxParams, getCanvasWidth, viewOffset]);
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
     dragStateRef.current = null;
+    panStateRef.current.active = false;
+    // @ts-ignore
+    try { e.target.releasePointerCapture(e.pointerId); } catch(e) {}
   }, []);
 
   const themeStyle = useMemo(() => ({
@@ -505,33 +540,30 @@ const App: React.FC = () => {
     color: currentTheme.colors.buttonText
   }), [currentTheme]);
 
+  const canvasWidth = getCanvasWidth();
+
   return (
     <div 
-      className="flex h-screen w-screen overflow-hidden" 
+      className="flex h-screen w-screen overflow-hidden relative" 
       style={themeStyle} 
-      onMouseMove={handleMouseMove} 
-      onMouseUp={handleMouseUp} 
-      onMouseDown={() => { if(!isStarted) startAudio(); }}
+      onPointerMove={handlePointerMove} 
+      onPointerDown={handlePointerDownContainer}
+      onPointerUp={handlePointerUp}
     >
       <style>{`
         body { font-family: ${currentTheme.colors.fontFamily}; }
         .glass-panel { background: ${currentTheme.colors.sidebarBg}; }
         button { border-color: ${currentTheme.colors.accent}44; color: ${currentTheme.colors.buttonText}; }
-        select { background: #000; color: #fff; }
-        option { background: #000; color: #fff; }
       `}</style>
       
       <div className="fixed inset-0 pointer-events-none" style={{ background: currentTheme.colors.bgGlow, zIndex: -1 }} />
       
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        className="hidden" 
-        accept=".json"
-      />
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json" />
 
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        {/* Catalyst Field layer */}
+        <CatalystField density={catalystDensity} nodes={nodes} viewOffset={viewOffset} impactSettings={impactSettings} />
+
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
             <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -540,142 +572,144 @@ const App: React.FC = () => {
             </linearGradient>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
-              <feMerge>
-                <feMergeNode in="coloredBlur"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
+              <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
           </defs>
-          {connections.map((conn) => {
-            const from = nodes.find(n => n.id === conn.fromId);
-            const to = nodes.find(n => n.id === conn.toId);
-            if (!from || !to) return null;
-            const isSel = selectedConnectionId === conn.id;
-            const isHov = hoveredConnectionId === conn.id;
-            const d = `M ${from.pos.x} ${from.pos.y} L ${to.pos.x} ${to.pos.y}`;
-            const isFM = to.type === 'OSC';
-            return (
-              <g 
-                key={conn.id} 
-                className="pointer-events-auto cursor-pointer" 
-                onClick={(e) => { e.stopPropagation(); setSelectedConnectionId(conn.id); setSelectedId(null); }}
-                onMouseEnter={() => setHoveredConnectionId(conn.id)}
-                onMouseLeave={() => setHoveredConnectionId(null)}
-              >
-                <path d={d} stroke="transparent" strokeWidth="30" className="cursor-pointer" fill="none" />
-                {(isSel || isHov) && (
-                  <path d={d} stroke={currentTheme.colors.accent} strokeWidth={isSel ? "8" : "6"} strokeOpacity="0.3" filter="url(#glow)" fill="none" />
-                )}
-                <path 
-                  d={d} 
-                  stroke={isSel ? currentTheme.colors.accent : "url(#signalGrad)"} 
-                  strokeWidth={isSel ? "5" : "2"} 
-                  strokeDasharray={isFM ? "2,2" : "10,5"} 
-                  className={`transition-all ${hoveredConnectionId === conn.id ? 'opacity-100' : 'opacity-60'}`} 
-                  fill="none" 
-                />
-                <circle r="3" fill="#fff" filter="blur(1px)">
-                    <animateMotion dur={isFM ? "0.8s" : "2s"} repeatCount="indefinite" path={d} />
-                </circle>
-              </g>
-            );
-          })}
+          <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)` }}>
+            {/* Frequency boundary line moving with workspace */}
+            <line 
+                x1={canvasWidth / 3} y1={-5000} x2={canvasWidth / 3} y2={5000} 
+                stroke="white" strokeWidth="1" strokeOpacity="0.05" strokeDasharray="10,10" 
+            />
+
+            {connections.map((conn) => {
+              const from = nodes.find(n => n.id === conn.fromId);
+              const to = nodes.find(n => n.id === conn.toId);
+              if (!from || !to) return null;
+              const isSel = selectedConnectionId === conn.id;
+              const isHov = hoveredConnectionId === conn.id;
+              const d = `M ${from.pos.x} ${from.pos.y} L ${to.pos.x} ${to.pos.y}`;
+              const isFM = to.type === 'OSC';
+              return (
+                <g key={conn.id} className="pointer-events-auto cursor-pointer" 
+                   onClick={(e) => { e.stopPropagation(); setSelectedConnectionId(conn.id); setSelectedId(null); }}
+                   onMouseEnter={() => setHoveredConnectionId(conn.id)}
+                   onMouseLeave={() => setHoveredConnectionId(null)}>
+                  <path d={d} stroke="transparent" strokeWidth="30" className="cursor-pointer" fill="none" />
+                  {(isSel || isHov) && <path d={d} stroke={currentTheme.colors.accent} strokeWidth={isSel ? "8" : "6"} strokeOpacity="0.3" filter="url(#glow)" fill="none" />}
+                  <path d={d} stroke={isSel ? currentTheme.colors.accent : "url(#signalGrad)"} strokeWidth={isSel ? "5" : "2"} strokeDasharray={isFM?"2,2":"10,5"} className={`transition-all ${hoveredConnectionId === conn.id ? 'opacity-100' : 'opacity-60'}`} fill="none" />
+                  <circle r="3" fill="#fff" filter="blur(1px)"><animateMotion dur={isFM?"0.8s":"2s"} repeatCount="indefinite" path={d} /></circle>
+                </g>
+              );
+            })}
+          </g>
         </svg>
 
-        {nodes.map(node => {
-          const hasIncoming = connections.some(c => c.toId === node.id);
-          return (
-            <Bubble 
-                key={node.id} 
-                node={node} 
-                isSelected={selectedId === node.id} 
-                isConnecting={isConnecting || isBinding} 
-                hasIncoming={hasIncoming}
-                theme={currentTheme}
-                onMouseDown={handleMouseDown} 
-                onSelect={setSelectedId} 
-            />
-          );
-        })}
-
-        <div className="absolute top-8 left-8 flex gap-4 z-20 items-center">
-            <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md hover:bg-white/10">Oscillator</button>
-            <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md hover:bg-white/10">Effect</button>
-            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-6 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md hover:opacity-80">{isConnecting ? 'Cancel Route' : 'Route Flux'}</button>
-            
-            <button 
-                onClick={toggleTransport} 
-                style={{ 
-                    background: isPlaying ? 'rgba(16, 185, 129, 0.2)' : '#dc2626'
-                }} 
-                className={`px-6 py-2.5 rounded-full font-black tracking-[0.2em] text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md flex items-center justify-center gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10' : 'text-white border-white/40 hover:scale-105 active:scale-95'}`}
-            >
-                {isPlaying ? (
-                    <>
-                        <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
-                        <span>Stop</span>
-                    </>
-                ) : (
-                    <>
-                        <svg className="w-4 h-4 fill-current flex-shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                        <span>Play</span>
-                    </>
-                )}
-            </button>
-            
-            <div className="flex gap-2 ml-4">
-              <button onClick={handleExport} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/40 hover:text-white/80">
-                  Export
-              </button>
-              <button onClick={handleImportClick} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/40 hover:text-white/80">
-                  Import
-              </button>
-              <button onClick={resetAll} style={{ background: 'rgba(255, 255, 255, 0.05)' }} className="px-4 py-2.5 rounded-full font-black tracking-widest text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md text-white/30 hover:text-white/80">
-                  Clear
-              </button>
+        <div style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)` }}>
+          <div className="absolute" style={{ left: canvasWidth / 3, top: 0, height: '100vh', width: 200, pointerEvents: 'none' }}>
+            <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr] absolute bottom-12 left-4">
+               World Depth Spectrum (0-20Hz)
             </div>
-        </div>
-
-        <div className="absolute top-8 right-8 z-20 flex flex-col items-end gap-2">
-            <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 px-2">Atmosphere</label>
-            <div className="relative">
-              <select 
-                value={currentTheme.id}
-                onChange={(e) => {
-                  const theme = THEMES.find(t => t.id === e.target.value);
-                  if (theme) setCurrentTheme(theme);
-                }}
-                className="bg-black/60 border border-white/20 backdrop-blur-3xl rounded-full px-6 py-2 text-[10px] font-black uppercase tracking-widest appearance-none cursor-pointer hover:bg-white/10 transition-all text-white outline-none ring-0 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
-              >
-                {THEMES.map(t => <option key={t.id} value={t.id} className="bg-black text-white">{t.name}</option>)}
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40 text-[8px]">▼</div>
-            </div>
-        </div>
-
-        <div className="absolute inset-y-0 left-0 w-1/3 border-r border-white/5 pointer-events-none z-10 flex flex-col justify-end p-8">
-          <div className="text-[10px] font-black uppercase text-white/5 tracking-[0.4em] rotate-180 [writing-mode:vertical-lr]">
-            Granular Depth (0-20Hz)
           </div>
+          {nodes.map(node => (
+            <Bubble key={node.id} node={node} isSelected={selectedId === node.id} isConnecting={isConnecting || isBinding} hasIncoming={connections.some(c => c.toId === node.id)} theme={currentTheme} onMouseDown={handlePointerDownBubble} onSelect={setSelectedId} />
+          ))}
+        </div>
+
+        {/* Top Controls */}
+        <div className="absolute top-4 sm:top-8 left-4 sm:left-8 flex flex-wrap gap-2 sm:gap-4 z-20 items-center max-w-[calc(100%-120px)]">
+            <button onClick={() => addNode('OSC')} style={{ background: currentTheme.colors.buttonBg }} className="px-3 sm:px-6 py-2 sm:py-2.5 rounded-full font-black tracking-widest text-[9px] sm:text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Osc</button>
+            <button onClick={() => addNode('FX')} style={{ background: currentTheme.colors.buttonBg }} className="px-3 sm:px-6 py-2 sm:py-2.5 rounded-full font-black tracking-widest text-[9px] sm:text-[11px] shadow-2xl transition-all active:scale-95 uppercase border backdrop-blur-md">Fx</button>
+            <button onClick={() => {setIsConnecting(!isConnecting); setIsBinding(false);}} style={{ background: isConnecting ? currentTheme.colors.accent : currentTheme.colors.buttonBg, color: isConnecting ? '#000' : currentTheme.colors.buttonText }} className="px-3 sm:px-6 py-2 sm:py-2.5 rounded-full font-black tracking-widest text-[9px] sm:text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">{isConnecting ? 'Cancel' : 'Route'}</button>
+            <button onClick={() => {setIsBinding(!isBinding); setIsConnecting(false);}} style={{ background: isBinding ? '#f59e0b' : currentTheme.colors.buttonBg, color: isBinding ? '#000' : currentTheme.colors.buttonText }} className="px-3 sm:px-6 py-2 sm:py-2.5 rounded-full font-black tracking-widest text-[9px] sm:text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md">{isBinding ? 'Cancel' : 'Bind'}</button>
+            <button onClick={toggleTransport} style={{ background: isPlaying ? 'rgba(16, 185, 129, 0.2)' : '#dc2626' }} className={`px-3 sm:px-6 py-2 sm:py-2.5 rounded-full font-black tracking-[0.1em] sm:tracking-[0.2em] text-[9px] sm:text-[11px] shadow-2xl uppercase transition-all border backdrop-blur-md flex items-center justify-center gap-1 sm:gap-3 ${isPlaying ? 'text-emerald-400 border-emerald-500/50' : 'text-white border-white/40'}`}>
+                {isPlaying ? <svg className="w-3 h-3 sm:w-4 sm:h-4 fill-current" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /></svg> : <svg className="w-3 h-3 sm:w-4 sm:h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>}
+                <span>{isPlaying ? 'Stop' : 'Play'}</span>
+            </button>
+        </div>
+
+        {/* Right Corner Menu */}
+        <div className="absolute top-4 sm:top-8 right-4 sm:right-8 z-30">
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ background: currentTheme.colors.buttonBg }} className="w-10 h-10 flex items-center justify-center rounded-full border border-white/20 backdrop-blur-md hover:bg-white/10 transition-all active:scale-90 shadow-2xl">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
+            {isMenuOpen && (
+                <div className="absolute top-12 right-0 w-80 bg-black/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-[0_20px_50px_rgba(0,0,0,1)] z-50 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+                    <div className="p-4 border-b border-white/5 mb-1">
+                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 block">Atmosphere</label>
+                        <select value={currentTheme.id} onChange={(e) => { const theme = THEMES.find(t => t.id === e.target.value); if (theme) setCurrentTheme(theme); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white outline-none cursor-pointer mb-4">
+                            {THEMES.map(t => <option key={t.id} value={t.id} className="bg-black text-white">{t.name}</option>)}
+                        </select>
+                        
+                        <div className="space-y-4 pt-2">
+                          <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 block">Catalyst Flux ({catalystDensity})</label>
+                            <input 
+                                type="range" min="0" max="1000" value={catalystDensity} 
+                                onChange={(e) => setCatalystDensity(parseInt(e.target.value))}
+                                className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1 block">Impact Protocols</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.toneSpike} onChange={e => setImpactSettings(s => ({...s, toneSpike: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Tone Warp</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.sparkTransients} onChange={e => setImpactSettings(s => ({...s, sparkTransients: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Sparks</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.paramFlutter} onChange={e => setImpactSettings(s => ({...s, paramFlutter: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Flutter</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.subThump} onChange={e => setImpactSettings(s => ({...s, subThump: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Sub Thump</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.glitchShred} onChange={e => setImpactSettings(s => ({...s, glitchShred: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Glitch Shred</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.echoSplash} onChange={e => setImpactSettings(s => ({...s, echoSplash: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Ghost Echo</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group p-1 hover:bg-white/5 rounded-md transition-colors">
+                                <input type="checkbox" checked={impactSettings.filterWarp} onChange={e => setImpactSettings(s => ({...s, filterWarp: e.target.checked}))} className="w-3 h-3 rounded bg-white/10 border-white/20 accent-indigo-500" />
+                                <span className="text-[8px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">Filter Warp</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                    </div>
+                    <button onClick={handleExport} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest hover:bg-white/10 rounded-xl transition-colors">Export Patch</button>
+                    <button onClick={handleImportClick} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest hover:bg-white/10 rounded-xl transition-colors">Import Patch</button>
+                    <div className="mt-1 pt-1 border-t border-white/5">
+                        <button onClick={resetAll} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">Clear Space</button>
+                    </div>
+                </div>
+            )}
         </div>
 
         {(isConnecting || isBinding) && (
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-2xl px-12 py-4 rounded-full border border-white/20 text-[11px] font-black uppercase tracking-[0.3em] animate-pulse z-50 shadow-2xl">
-                {isConnecting ? 'Link Signal Destination (Esc to cancel)' : 'Bind Mass Parent (Esc to cancel)'}
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-2xl px-6 sm:px-12 py-3 sm:py-4 rounded-full border border-white/20 text-[9px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] animate-pulse z-50 shadow-2xl text-center">
+                {isConnecting ? 'Select Signal Sink (Esc to cancel)' : 'Select Binding Parent (Esc to cancel)'}
             </div>
+        )}
+
+        {/* Sidebar Toggle Tab */}
+        {!isSidebarOpen && (
+            <button onClick={() => setIsSidebarOpen(true)} style={{ background: 'rgba(0,0,0,0.4)', color: '#fff' }} className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-32 flex items-center justify-center rounded-l-2xl border-l border-t border-b border-white/20 backdrop-blur-md z-30 transition-all hover:w-10 active:scale-95 group">
+                <div className="transition-transform duration-300 rotate-0"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg></div>
+            </button>
         )}
       </div>
 
-      <Sidebar 
-        selectedNode={nodes.find(n => n.id === selectedId) || null}
-        theme={currentTheme}
-        onUpdate={updateNode}
-        onDelete={deleteNode}
-        onBind={() => {setIsBinding(true); setIsConnecting(false);}}
-        onUnbind={(id) => updateNode(id, { boundTo: undefined })}
-        selectedConnectionId={selectedConnectionId}
-        onDeleteConnection={deleteConnection}
-      />
+      <Sidebar selectedNode={nodes.find(n => n.id === selectedId) || null} theme={currentTheme} isOpen={isSidebarOpen} onUpdate={updateNode} onDelete={deleteNode} onUnbind={(id) => updateNode(id, { boundTo: undefined })} onClose={() => setIsSidebarOpen(false)} selectedConnectionId={selectedConnectionId} onDeleteConnection={deleteConnection} />
     </div>
   );
 };

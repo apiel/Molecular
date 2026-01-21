@@ -1,9 +1,10 @@
-import { OscType, FxType } from '../types';
+import { OscType, FxType, ImpactSettings } from '../types';
 
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
+  private impactGain: GainNode | null = null;
   private nodes: Map<string, { 
     main: AudioNode, 
     input?: AudioNode, 
@@ -14,21 +15,26 @@ class AudioEngine {
     outgoingSignalConnections: Set<string>,
     isAudiblePreference: boolean
   }> = new Map();
-  private isMuted: boolean = true; // Default to muted (Stopped)
+  private isMuted: boolean = true; 
 
   constructor() {}
 
   public init() {
     if (!this.ctx) {
-      this.ctx = new AudioContext();
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.masterGain = this.ctx.createGain();
-      // Start at 0 gain because app starts in "Stop" state
       this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
+      
+      this.impactGain = this.ctx.createGain();
+      this.impactGain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+      this.impactGain.connect(this.masterGain);
+
       this.createNoiseBuffer();
     }
+    
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(e => console.error("Context resume failed", e));
     }
   }
 
@@ -46,16 +52,18 @@ class AudioEngine {
   public setMasterMute(muted: boolean) {
     this.isMuted = muted;
     if (!this.masterGain || !this.ctx) return;
-    // Standard drone level is 0.3 when playing, 0 when stopped
-    this.masterGain.gain.setTargetAtTime(muted ? 0 : 0.3, this.ctx.currentTime, 0.1);
+    const target = muted ? 0 : 0.3;
+    this.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.1);
   }
 
   public createOscillator(id: string, type: OscType, freq: number, gain: number, isAudible: boolean) {
+    this.init();
     if (!this.ctx || !this.masterGain) return;
 
     let mainNode: AudioNode;
     let params: { [key: string]: AudioParam | { value: number } } = {};
     const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, this.ctx.currentTime);
 
     if (type === 'noise') {
       const source = this.ctx.createBufferSource();
@@ -107,20 +115,135 @@ class AudioEngine {
     this.updateAudible(id, isAudible);
   }
 
+  public triggerDisturbance(id: string, velocityY: number, pan: number, settings: ImpactSettings) {
+    const node = this.nodes.get(id);
+    if (!node || !this.ctx || !this.impactGain) return;
+
+    const now = this.ctx.currentTime;
+    const isFalling = velocityY > 0;
+    const intensity = Math.min(1, Math.abs(velocityY) / 10);
+
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'equalpower';
+    panner.setPosition(pan, 0, 1 - Math.abs(pan));
+    panner.connect(this.impactGain);
+
+    // ---PROTOCOL: SPARKS---
+    if (settings.sparkTransients && this.noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      const noiseFilter = this.ctx.createBiquadFilter();
+      const noiseEnv = this.ctx.createGain();
+      noiseSource.buffer = this.noiseBuffer;
+      noiseFilter.type = 'highpass';
+      noiseFilter.frequency.setValueAtTime(isFalling ? 2000 : 5000, now);
+      noiseEnv.gain.setValueAtTime(0, now);
+      noiseEnv.gain.linearRampToValueAtTime(0.3 * intensity, now + 0.005);
+      noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      noiseSource.connect(noiseFilter);
+      noiseFilter.connect(noiseEnv);
+      noiseEnv.connect(panner);
+      noiseSource.start(now);
+      noiseSource.stop(now + 0.1);
+    }
+
+    // ---PROTOCOL: SUB THUMP---
+    if (settings.subThump) {
+      const thump = this.ctx.createOscillator();
+      const thumpEnv = this.ctx.createGain();
+      thump.type = 'sine';
+      thump.frequency.setValueAtTime(120, now);
+      thump.frequency.exponentialRampToValueAtTime(20, now + 0.15);
+      thumpEnv.gain.setValueAtTime(0, now);
+      thumpEnv.gain.linearRampToValueAtTime(0.6 * intensity, now + 0.005);
+      thumpEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      thump.connect(thumpEnv);
+      thumpEnv.connect(panner);
+      thump.start(now);
+      thump.stop(now + 0.3);
+    }
+
+    // ---PROTOCOL: GLITCH SHRED---
+    if (settings.glitchShred) {
+      const glitch = this.ctx.createOscillator();
+      const glitchEnv = this.ctx.createGain();
+      glitch.type = 'square';
+      glitch.frequency.setValueAtTime(Math.random() * 5000 + 1000, now);
+      glitchEnv.gain.setValueAtTime(0, now);
+      glitchEnv.gain.setValueAtTime(0.15 * intensity, now + 0.001);
+      glitchEnv.gain.setValueAtTime(0, now + 0.01);
+      glitchEnv.gain.setValueAtTime(0.1 * intensity, now + 0.015);
+      glitchEnv.gain.linearRampToValueAtTime(0, now + 0.03);
+      glitch.connect(glitchEnv);
+      glitchEnv.connect(panner);
+      glitch.start(now);
+      glitch.stop(now + 0.05);
+    }
+
+    // ---PROTOCOL: ECHO SPLASH---
+    if (settings.echoSplash) {
+      const splashDelay = this.ctx.createDelay(1.0);
+      const splashFeedback = this.ctx.createGain();
+      const splashEnv = this.ctx.createGain();
+      splashDelay.delayTime.setValueAtTime(0.1 + Math.random() * 0.2, now);
+      splashFeedback.gain.setValueAtTime(0.5, now);
+      splashEnv.gain.setValueAtTime(0, now);
+      splashEnv.gain.linearRampToValueAtTime(0.4 * intensity, now + 0.01);
+      splashEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      
+      const splashInput = this.ctx.createGain();
+      splashInput.gain.setValueAtTime(1, now);
+      splashInput.connect(splashDelay);
+      splashDelay.connect(splashFeedback);
+      splashFeedback.connect(splashDelay);
+      splashDelay.connect(splashEnv);
+      splashEnv.connect(panner);
+
+      // Trigger the "Ping" into the delay
+      const ping = this.ctx.createOscillator();
+      ping.type = 'triangle';
+      ping.frequency.setValueAtTime(2000, now);
+      ping.connect(splashInput);
+      ping.start(now);
+      ping.stop(now + 0.02);
+    }
+
+    // --- MOLECULE HARMONIC DISTURBANCE ---
+    if (settings.toneSpike && node.params.detune instanceof AudioParam) {
+      const p = node.params.detune;
+      const centsShift = -velocityY * 200; 
+      p.cancelScheduledValues(now);
+      p.setTargetAtTime(centsShift, now, 0.01);
+      p.setTargetAtTime(0, now + 0.05, 0.2);
+    } 
+    
+    if (settings.paramFlutter && node.params.cutoff instanceof AudioParam) {
+      const p = node.params.cutoff;
+      const base = p.value;
+      const shift = isFalling ? -base * 0.4 : base * 0.6;
+      p.cancelScheduledValues(now);
+      p.setTargetAtTime(base + shift, now, 0.01);
+      p.setTargetAtTime(base, now + 0.04, 0.15);
+    }
+
+    if (settings.filterWarp && node.params.cutoff instanceof AudioParam) {
+        const p = node.params.cutoff;
+        const base = p.value;
+        p.cancelScheduledValues(now);
+        p.exponentialRampToValueAtTime(Math.min(20000, base * 5), now + 0.05);
+        p.exponentialRampToValueAtTime(base, now + 0.2);
+    }
+  }
+
   public updateOscType(id: string, type: OscType) {
     const node = this.nodes.get(id);
     if (!node || !this.ctx) return;
-
     const currentParams = node.params;
     const currentFreq = typeof currentParams.frequency?.value === 'number' ? currentParams.frequency.value : 440;
     const currentGain = typeof currentParams.gain?.value === 'number' ? currentParams.gain.value : 0.1;
     const currentAudible = node.isAudiblePreference;
-    
     try { node.main.disconnect(); } catch (e) {}
     if ('stop' in node.main) (node.main as any).stop();
-
     this.createOscillator(id, type, currentFreq, currentGain, currentAudible);
-    
     const newNode = this.nodes.get(id)!;
     node.modGains.forEach((gain, targetId) => {
         newNode.modGains.set(targetId, gain);
@@ -134,6 +257,7 @@ class AudioEngine {
   }
 
   public createEffect(id: string, type: FxType) {
+    this.init();
     if (!this.ctx || !this.masterGain) return;
 
     let input: AudioNode;

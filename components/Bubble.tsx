@@ -7,7 +7,7 @@ interface BubbleProps {
   isConnecting: boolean;
   hasIncoming: boolean;
   theme: Theme;
-  onMouseDown: (e: React.MouseEvent, id: string) => void;
+  onMouseDown: (e: React.PointerEvent, id: string) => void;
   onSelect: (id: string) => void;
 }
 
@@ -31,10 +31,8 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
       return { background: '#18181b', opacity: 0.6 }; 
     }
 
-    // Use the node's custom color if available, otherwise fallback to theme defaults
     const baseColor = node.color || (node.type === 'OSC' ? theme.colors.oscStart : theme.colors.fxStart);
     
-    // Create a deep gradient from the custom color
     return { 
       background: `linear-gradient(135deg, ${baseColor} 0%, rgba(0,0,0,0.6) 150%)`,
       boxShadow: `inset 0 0 20px ${baseColor}44, 0 10px 30px rgba(0,0,0,0.5)`
@@ -61,15 +59,15 @@ export const Bubble: React.FC<BubbleProps> = React.memo(({
         willChange: 'left, top, transform',
         zIndex: isSelected ? 40 : 20,
         transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        touchAction: 'none',
         ...backgroundStyle
       }}
-      onMouseDown={(e) => {
+      onPointerDown={(e) => {
         e.stopPropagation();
         onMouseDown(e, node.id);
         onSelect(node.id);
       }}
     >
-      {/* Persistant Halo Effect behind the bubble */}
       <div 
         className="bubble-halo-effect" 
         style={{ 
