@@ -4,6 +4,7 @@ class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
+  private impactGain: GainNode | null = null;
   private nodes: Map<string, { 
     main: AudioNode, 
     input?: AudioNode, 
@@ -24,6 +25,12 @@ class AudioEngine {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
+      
+      // Dedicated gain for impact transients
+      this.impactGain = this.ctx.createGain();
+      this.impactGain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+      this.impactGain.connect(this.masterGain);
+
       this.createNoiseBuffer();
     }
     
@@ -109,31 +116,80 @@ class AudioEngine {
     this.updateAudible(id, isAudible);
   }
 
-  public triggerDisturbance(id: string, velocityY: number) {
+  /**
+   * Triggers a spatialized high-energy impact sound and disturbs the molecule's harmonics.
+   */
+  public triggerDisturbance(id: string, velocityY: number, pan: number) {
     const node = this.nodes.get(id);
-    if (!node || !this.ctx) return;
+    if (!node || !this.ctx || !this.impactGain) return;
 
-    // Determine shift amount based on vertical velocity
-    // Neg velocity (moving up) -> High Pitch
-    // Pos velocity (moving down) -> Low Pitch
-    const centsShift = -velocityY * 150; // Max velocity ~5-10, so shift ~750-1500 cents
+    const now = this.ctx.currentTime;
+    const isFalling = velocityY > 0;
+    const intensity = Math.min(1, Math.abs(velocityY) / 10);
+
+    // --- 1. SPATIAL TRANSIENT SOUND ---
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'equalpower';
+    panner.setPosition(pan, 0, 1 - Math.abs(pan));
+    panner.connect(this.impactGain);
+
+    // The "Spark" (Noise burst)
+    if (this.noiseBuffer) {
+      const noiseSource = this.ctx.createBufferSource();
+      const noiseFilter = this.ctx.createBiquadFilter();
+      const noiseEnv = this.ctx.createGain();
+
+      noiseSource.buffer = this.noiseBuffer;
+      noiseFilter.type = 'highpass';
+      noiseFilter.frequency.setValueAtTime(isFalling ? 2000 : 5000, now);
+      
+      noiseEnv.gain.setValueAtTime(0, now);
+      noiseEnv.gain.linearRampToValueAtTime(0.3 * intensity, now + 0.005);
+      noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+      noiseSource.connect(noiseFilter);
+      noiseFilter.connect(noiseEnv);
+      noiseEnv.connect(panner);
+      noiseSource.start(now);
+      noiseSource.stop(now + 0.1);
+    }
+
+    // The "Ping" (Chirp)
+    const ping = this.ctx.createOscillator();
+    const pingEnv = this.ctx.createGain();
+    ping.type = 'sine';
+    const startFreq = isFalling ? 800 : 2500;
+    ping.frequency.setValueAtTime(startFreq, now);
+    ping.frequency.exponentialRampToValueAtTime(startFreq * 0.1, now + 0.04);
     
-    // For Oscillators: Use Detune
+    pingEnv.gain.setValueAtTime(0, now);
+    pingEnv.gain.linearRampToValueAtTime(0.2 * intensity, now + 0.002);
+    pingEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    ping.connect(pingEnv);
+    pingEnv.connect(panner);
+    ping.start(now);
+    ping.stop(now + 0.1);
+
+    // --- 2. MOLECULE DISTURBANCE ---
+    const centsShift = -velocityY * 200; 
+    
     if (node.params.detune instanceof AudioParam) {
       const p = node.params.detune;
-      const now = this.ctx.currentTime;
       p.cancelScheduledValues(now);
-      p.setTargetAtTime(centsShift, now, 0.05);
-      p.setTargetAtTime(0, now + 0.15, 0.4); // Return to baseline
+      // Sharp jolt
+      p.setTargetAtTime(centsShift, now, 0.01);
+      // Easing back to center
+      p.setTargetAtTime(0, now + 0.05, 0.2);
     } 
-    // For Noise/S&H/Effects: Use subtle gain/param flutter
-    else if (node.params.cutoff instanceof AudioParam) {
+    
+    if (node.params.cutoff instanceof AudioParam) {
       const p = node.params.cutoff;
-      const now = this.ctx.currentTime;
       const base = p.value;
-      const shift = velocityY < 0 ? base * 0.5 : -base * 0.3;
-      p.setTargetAtTime(base + shift, now, 0.05);
-      p.setTargetAtTime(base, now + 0.1, 0.3);
+      const shift = isFalling ? -base * 0.4 : base * 0.6;
+      p.cancelScheduledValues(now);
+      p.setTargetAtTime(base + shift, now, 0.01);
+      p.setTargetAtTime(base, now + 0.04, 0.15);
     }
   }
 

@@ -24,7 +24,6 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
 
   useEffect(() => {
     // Re-seed catalysts when density changes
-    // Increased multiplier to allow for massive amounts of particles
     const count = Math.floor(density * 3.0);
     const newCatalysts: Catalyst[] = [];
     const colors = ['#ffffff', '#818cf8', '#34d399', '#f472b6', '#fbbf24'];
@@ -52,6 +51,7 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
     
     const catalysts = catalystsRef.current;
     const nodeCount = nodes.length;
+    const canvasWidth = canvas.width;
     
     for (let i = 0; i < catalysts.length; i++) {
       const c = catalysts[i];
@@ -59,7 +59,7 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
       c.x += c.vx;
       c.y += c.vy;
 
-      // Wrap around larger world bounds
+      // Wrap around world bounds
       if (c.x > 3500) c.x = -3500;
       if (c.x < -3500) c.x = 3500;
       if (c.y > 3500) c.y = -3500;
@@ -69,7 +69,7 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
       const sy = c.y + viewOffset.y;
 
       // Render check
-      if (sx > -100 && sx < canvas.width + 100 && sy > -100 && sy < canvas.height + 100) {
+      if (sx > -100 && sx < canvasWidth + 100 && sy > -100 && sy < canvas.height + 100) {
         ctx.beginPath();
         ctx.moveTo(sx, sy);
         ctx.lineTo(sx - c.vx * 2, sy - c.vy * 2);
@@ -84,7 +84,7 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
         ctx.globalAlpha = 0.6;
         ctx.fill();
 
-        // Collision Check - Optimized loop
+        // Collision Check
         for (let j = 0; j < nodeCount; j++) {
             const node = nodes[j];
             const dx = c.x - node.pos.x;
@@ -93,8 +93,11 @@ export const CatalystField: React.FC<CatalystFieldProps> = ({ density, nodes, vi
             const radius = node.size / 2;
             
             if (distSq < radius * radius) {
-                audioEngine.triggerDisturbance(node.id, c.vy);
-                // Particle bounces and speeds up slightly
+                // Calculate normalized panning (-1 to 1) based on screen position
+                const pan = (sx / canvasWidth) * 2 - 1;
+                audioEngine.triggerDisturbance(node.id, c.vy, pan);
+                
+                // Elastic bounce
                 c.vx *= -1.1;
                 c.vy *= -1.1;
                 c.x += c.vx * 3;
