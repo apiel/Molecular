@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SynthNode, Position, Connection, NodeType, Theme } from './types';
 import { Bubble } from './components/Bubble';
 import { Sidebar } from './components/Sidebar';
+import { CatalystField } from './components/CatalystField';
 import { audioEngine } from './services/audioEngine';
 
 const STORAGE_KEY = 'molecular_synth_v1';
@@ -137,10 +138,10 @@ const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false); 
-  // Desktop Sidebar open by default
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
+  const [catalystDensity, setCatalystDensity] = useState(15);
   
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const panStateRef = useRef<{ active: boolean, startX: number, startY: number, initialX: number, initialY: number }>({
@@ -549,6 +550,9 @@ const App: React.FC = () => {
       <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json" />
 
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        {/* Catalyst Field layer */}
+        <CatalystField density={catalystDensity} nodes={nodes} viewOffset={viewOffset} />
+
         <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
           <defs>
             <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -619,12 +623,19 @@ const App: React.FC = () => {
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
             {isMenuOpen && (
-                <div className="absolute top-12 right-0 w-56 bg-black/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-[0_20px_50px_rgba(0,0,0,1)] z-50 animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute top-12 right-0 w-64 bg-black/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-[0_20px_50px_rgba(0,0,0,1)] z-50 animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b border-white/5 mb-1">
                         <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 block">Atmosphere</label>
-                        <select value={currentTheme.id} onChange={(e) => { const theme = THEMES.find(t => t.id === e.target.value); if (theme) setCurrentTheme(theme); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white outline-none cursor-pointer">
+                        <select value={currentTheme.id} onChange={(e) => { const theme = THEMES.find(t => t.id === e.target.value); if (theme) setCurrentTheme(theme); }} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white outline-none cursor-pointer mb-4">
                             {THEMES.map(t => <option key={t.id} value={t.id} className="bg-black text-white">{t.name}</option>)}
                         </select>
+                        
+                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 block">Catalyst Flux ({catalystDensity})</label>
+                        <input 
+                            type="range" min="0" max="200" value={catalystDensity} 
+                            onChange={(e) => setCatalystDensity(parseInt(e.target.value))}
+                            className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
+                        />
                     </div>
                     <button onClick={handleExport} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest hover:bg-white/10 rounded-xl transition-colors">Export Patch</button>
                     <button onClick={handleImportClick} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest hover:bg-white/10 rounded-xl transition-colors">Import Patch</button>

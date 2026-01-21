@@ -14,7 +14,7 @@ class AudioEngine {
     outgoingSignalConnections: Set<string>,
     isAudiblePreference: boolean
   }> = new Map();
-  private isMuted: boolean = true; // Default to muted (Stopped)
+  private isMuted: boolean = true; 
 
   constructor() {}
 
@@ -22,7 +22,6 @@ class AudioEngine {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.masterGain = this.ctx.createGain();
-      // Start at 0 gain because app starts in "Stop" state
       this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
       this.createNoiseBuffer();
@@ -47,13 +46,12 @@ class AudioEngine {
   public setMasterMute(muted: boolean) {
     this.isMuted = muted;
     if (!this.masterGain || !this.ctx) return;
-    // Standard drone level is 0.3 when playing, 0 when stopped
     const target = muted ? 0 : 0.3;
     this.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.1);
   }
 
   public createOscillator(id: string, type: OscType, freq: number, gain: number, isAudible: boolean) {
-    this.init(); // Safety check for context
+    this.init();
     if (!this.ctx || !this.masterGain) return;
 
     let mainNode: AudioNode;
@@ -111,20 +109,44 @@ class AudioEngine {
     this.updateAudible(id, isAudible);
   }
 
-  public updateOscType(id: string, type: OscType) {
+  public triggerDisturbance(id: string, velocityY: number) {
     const node = this.nodes.get(id);
     if (!node || !this.ctx) return;
 
+    // Determine shift amount based on vertical velocity
+    // Neg velocity (moving up) -> High Pitch
+    // Pos velocity (moving down) -> Low Pitch
+    const centsShift = -velocityY * 150; // Max velocity ~5-10, so shift ~750-1500 cents
+    
+    // For Oscillators: Use Detune
+    if (node.params.detune instanceof AudioParam) {
+      const p = node.params.detune;
+      const now = this.ctx.currentTime;
+      p.cancelScheduledValues(now);
+      p.setTargetAtTime(centsShift, now, 0.05);
+      p.setTargetAtTime(0, now + 0.15, 0.4); // Return to baseline
+    } 
+    // For Noise/S&H/Effects: Use subtle gain/param flutter
+    else if (node.params.cutoff instanceof AudioParam) {
+      const p = node.params.cutoff;
+      const now = this.ctx.currentTime;
+      const base = p.value;
+      const shift = velocityY < 0 ? base * 0.5 : -base * 0.3;
+      p.setTargetAtTime(base + shift, now, 0.05);
+      p.setTargetAtTime(base, now + 0.1, 0.3);
+    }
+  }
+
+  public updateOscType(id: string, type: OscType) {
+    const node = this.nodes.get(id);
+    if (!node || !this.ctx) return;
     const currentParams = node.params;
     const currentFreq = typeof currentParams.frequency?.value === 'number' ? currentParams.frequency.value : 440;
     const currentGain = typeof currentParams.gain?.value === 'number' ? currentParams.gain.value : 0.1;
     const currentAudible = node.isAudiblePreference;
-    
     try { node.main.disconnect(); } catch (e) {}
     if ('stop' in node.main) (node.main as any).stop();
-
     this.createOscillator(id, type, currentFreq, currentGain, currentAudible);
-    
     const newNode = this.nodes.get(id)!;
     node.modGains.forEach((gain, targetId) => {
         newNode.modGains.set(targetId, gain);
