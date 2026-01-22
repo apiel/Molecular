@@ -78,6 +78,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     const isOsc = selectedNode.type === 'OSC';
+    const isLFO = isOsc && !selectedNode.isAudible;
+
     const getMappingInfo = () => {
         const w = window.innerWidth < 1024 ? window.innerWidth : window.innerWidth - 320;
         const h = window.innerHeight;
@@ -86,7 +88,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         if (isOsc) {
             return { 
-                x: 'Freq (World)', xVal: `${selectedNode.frequency.toFixed(1)} Hz`, 
+                x: selectedNode.subType === 'noise' ? 'Morph' : 'Freq (World)', 
+                xVal: selectedNode.subType === 'noise' ? (x/w).toFixed(2) : `${selectedNode.frequency.toFixed(1)} Hz`, 
                 y: 'Depth', yVal: 'N/A',
                 xPercent: (x / w) * 100, yPercent: 0
             };
@@ -103,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <>
           <header className="border-b border-white/10 pb-4 flex justify-between items-start">
             <div>
-                <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{selectedNode.type}</h2>
+                <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{isLFO ? 'LFO' : selectedNode.type}</h2>
                 <span className="text-[10px] opacity-30 font-mono block mt-2 tracking-widest">{selectedNode.id.slice(0, 12)}</span>
             </div>
             <button onClick={onClose} className="p-2 text-white/50 font-black text-xs border border-white/10 rounded-lg hover:bg-white/5 transition-colors">CLOSE</button>
@@ -120,6 +123,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${selectedNode.isAudible ? 'left-[26px]' : 'left-0.5'}`} />
               </button>
             </div>
+
+            {isLFO && (
+              <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl">
+                 <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Status: Modulation Mode</p>
+                 <p className="text-[8px] opacity-50 uppercase mt-1 leading-tight">Molecule is silent but vibrates its connections.</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Molecule Hue</label>
@@ -192,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="space-y-3">
-              <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Density</label>
+              <label className="text-[10px] font-black uppercase opacity-40 tracking-[0.2em] block">Intensity / Gain</label>
               <input 
                 type="range" min="40" max="400" value={selectedNode.size}
                 onChange={(e) => onUpdate(selectedNode.id, { size: parseInt(e.target.value) })}
