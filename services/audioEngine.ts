@@ -146,13 +146,18 @@ class AudioEngine {
       mainNode = g;
       params = { frequency: morphControl.offset, gain: g.gain };
     } else if (type === 'sample-hold') {
+      const freqCtrl = this.ctx.createConstantSource();
+      freqCtrl.offset.setValueAtTime(freq, this.ctx.currentTime);
+      freqCtrl.start();
+
       const scriptNode = this.ctx.createScriptProcessor(256, 1, 1);
       let lastStepTime = 0;
       let currentValue = 0;
-      const freqObj = { value: freq };
+      
       scriptNode.onaudioprocess = (e) => {
         const output = e.outputBuffer.getChannelData(0);
-        const stepDuration = 1 / Math.max(0.1, freqObj.value);
+        const currentFreq = freqCtrl.offset.value;
+        const stepDuration = 1 / Math.max(0.1, currentFreq);
         for (let i = 0; i < output.length; i++) {
           const currentTime = this.ctx!.currentTime + (i / this.ctx!.sampleRate);
           if (currentTime - lastStepTime > stepDuration) {
@@ -163,7 +168,7 @@ class AudioEngine {
         }
       };
       mainNode = scriptNode;
-      params = { frequency: freqObj, gain: g.gain };
+      params = { frequency: freqCtrl.offset, gain: g.gain };
       mainNode.connect(g);
     } else {
       const osc = this.ctx.createOscillator();
@@ -273,6 +278,37 @@ class AudioEngine {
         params = { amount: distGain.gain }; extraNodes = { shaper };
         break;
       }
+      case 'phaser': {
+        const filter = this.ctx.createBiquadFilter(); filter.type = 'allpass';
+        const lfo = this.ctx.createOscillator(), lfoG = this.ctx.createGain();
+        lfo.frequency.value = 0.5; lfoG.gain.value = 500;
+        lfo.connect(lfoG); lfoG.connect(filter.frequency); lfo.start();
+        input = output = filter; params = { speed: lfo.frequency, depth: lfoG.gain }; extraNodes = { lfo, lfoG };
+        break;
+      }
+      case 'tremolo': {
+        const gainNode = this.ctx.createGain();
+        const lfo = this.ctx.createOscillator(), lfoG = this.ctx.createGain();
+        lfo.frequency.value = 4; lfoG.gain.value = 0.5;
+        lfo.connect(lfoG); lfoG.connect(gainNode.gain); lfo.start();
+        input = output = gainNode; params = { rate: lfo.frequency, intensity: lfoG.gain }; extraNodes = { lfo, lfoG };
+        break;
+      }
+      case 'bitcrusher': {
+        const shaper = this.ctx.createWaveShaper(), gainNode = this.ctx.createGain();
+        shaper.curve = this.makeBitcrushCurve(8); shaper.connect(gainNode);
+        input = shaper; output = gainNode; params = { bits: gainNode.gain }; extraNodes = { shaper };
+        break;
+      }
+      case 'chorus': {
+        const cin = this.ctx.createGain(), cout = this.ctx.createGain(), del = this.ctx.createDelay();
+        const lfo = this.ctx.createOscillator(), lg = this.ctx.createGain();
+        del.delayTime.value = 0.03; lfo.frequency.value = 1.5; lg.gain.value = 0.002;
+        lfo.connect(lg); lg.connect(del.delayTime); lfo.start();
+        cin.connect(cout); cin.connect(del); del.connect(cout);
+        input = cin; output = cout; params = { speed: lfo.frequency, intensity: lg.gain }; extraNodes = { lfo, lg, del };
+        break;
+      }
       case 'reverb': {
         const reverb = this.ctx.createConvolver(), revMix = this.ctx.createGain();
         reverb.buffer = this.createReverbBuffer(2.0); reverb.connect(revMix);
@@ -293,6 +329,7 @@ class AudioEngine {
     if (!old) return;
     try { old.output.disconnect(); } catch(e) {}
     if (old.input) try { old.input.disconnect(); } catch(e) {}
+    if (old.extraNodes?.lfo) { try { (old.extraNodes.lfo as OscillatorNode).stop(); } catch(e) {} }
     this.createEffect(id, type);
   }
 
@@ -316,18 +353,38 @@ class AudioEngine {
     return c;
   }
 
+  public makeBitcrushCurve(bits: number) {
+    const n = 44100; const c = new Float32Array(n); const s = Math.pow(2, bits);
+    for (let i = 0; i < n; ++i) {
+      const x = (i * 2) / n - 1;
+      c[i] = Math.round(x * s) / s;
+    }
+    return c;
+  }
+
   public updateAudible(id: string, isAudible: boolean) {
     const node = this.nodes.get(id);
     if (!node || !this.masterGain) return;
+    
     const wasAudible = node.isAudiblePreference;
     node.isAudiblePreference = isAudible;
-    try { node.output.disconnect(this.masterGain); } catch(e) {}
-    if (isAudible && node.outgoingSignalConnections.size === 0) node.output.connect(this.masterGain);
+
+    // Snapshot connections to avoid iteration issues
+    const currentTargets = Array.from(node.outgoingSignalConnections);
+    
+    // Toggle all existing connections to use the new "audible" logic 
+    // (switch between standard routing and modulation)
     if (wasAudible !== isAudible) {
-      node.outgoingSignalConnections.forEach(targetId => {
+      currentTargets.forEach(targetId => {
         this.disconnectNodes(id, targetId);
         this.connectNodes(id, targetId);
       });
+    }
+
+    // Handle master output routing
+    try { node.output.disconnect(this.masterGain); } catch(e) {}
+    if (node.isAudiblePreference && node.outgoingSignalConnections.size === 0) {
+      node.output.connect(this.masterGain);
     }
   }
 
@@ -339,7 +396,7 @@ class AudioEngine {
       if (param instanceof AudioParam) {
         const finalVal = (node.main instanceof GainNode && paramName === 'frequency') ? value / 2000 : value;
         param.setTargetAtTime(finalVal, this.ctx!.currentTime, 0.05);
-      } else {
+      } else if (typeof param === 'object' && 'value' in param) {
         param.value = value;
       }
     }
@@ -348,54 +405,77 @@ class AudioEngine {
   public connectNodes(fromId: string, toId: string) {
     const from = this.nodes.get(fromId), to = this.nodes.get(toId);
     if (!from || !to || !this.ctx) return;
+    
     from.outgoingSignalConnections.add(toId);
+    
+    // Sever master link if we now have an outgoing connection
     try { from.output.disconnect(this.masterGain!); } catch (e) {}
 
+    // Routing logic
     if (!from.isAudiblePreference) {
+        // MODULATION MODE
         let targetParam: AudioParam | null = this.getPrimaryFXParam(to);
-        if (!targetParam && to.params.frequency instanceof AudioParam) targetParam = to.params.frequency;
-        if (targetParam) {
+        if (!targetParam && to.params.frequency instanceof AudioParam) {
+          targetParam = to.params.frequency;
+        }
+        
+        if (targetParam instanceof AudioParam) {
             const modGain = this.ctx.createGain();
             const isNoise = to.params.frequency instanceof AudioParam && to.params.gain instanceof AudioParam && !(to.main instanceof OscillatorNode);
-            const depth = isNoise ? 0.3 : (targetParam.maxValue ? (targetParam.maxValue - targetParam.minValue) * 0.2 : 500);
+            const depth = isNoise ? 0.3 : 400; 
             modGain.gain.setValueAtTime(depth, this.ctx.currentTime);
             from.output.connect(modGain);
             modGain.connect(targetParam);
             from.modGains.set(toId, modGain);
-            return;
+        }
+    } else {
+        // STANDARD AUDIO MODE
+        if (to.input) {
+          from.output.connect(to.input);
+          // Downstream node must ensure it connects to master if it's the last in chain
+          this.refreshMasterLink(toId);
+        } else if (to.params.frequency instanceof AudioParam) {
+          const modGain = this.ctx.createGain();
+          modGain.gain.setValueAtTime(400, this.ctx.currentTime);
+          from.output.connect(modGain);
+          modGain.connect(to.params.frequency);
+          from.modGains.set(toId, modGain);
         }
     }
-    
-    if (to.input) {
-      from.output.connect(to.input);
-      this.updateAudible(toId, to.isAudiblePreference);
-    } else if (to.params.frequency instanceof AudioParam) {
-      const modGain = this.ctx.createGain();
-      modGain.gain.setValueAtTime(400, this.ctx.currentTime);
-      from.output.connect(modGain);
-      modGain.connect(to.params.frequency);
-      from.modGains.set(toId, modGain);
+  }
+
+  private refreshMasterLink(id: string) {
+    const node = this.nodes.get(id);
+    if (!node || !this.masterGain) return;
+    try { node.output.disconnect(this.masterGain); } catch(e) {}
+    if (node.isAudiblePreference && node.outgoingSignalConnections.size === 0) {
+      node.output.connect(this.masterGain);
     }
   }
 
   private getPrimaryFXParam(node: any): AudioParam | null {
     const p = node.params;
     if (!p) return null;
-    return p.cutoff || p.time || p.amount || p.speed || p.rate || p.bits || p.diffusion || null;
+    const param = p.cutoff || p.time || p.amount || p.speed || p.rate || p.bits || p.diffusion;
+    return (param instanceof AudioParam) ? param : null;
   }
 
   public disconnectNodes(fromId: string, toId: string) {
     const from = this.nodes.get(fromId), to = this.nodes.get(toId);
     if (!from || !to) return;
+    
     from.outgoingSignalConnections.delete(toId);
+    
     const modGain = from.modGains.get(toId);
     if (modGain) {
       try { from.output.disconnect(modGain); modGain.disconnect(); } catch (e) {}
       from.modGains.delete(toId);
     } else if (to.input) {
       try { from.output.disconnect(to.input); } catch (e) {}
-      this.updateAudible(fromId, from.isAudiblePreference);
     }
+
+    // Restore master link if it was the last connection
+    this.refreshMasterLink(fromId);
   }
 
   public removeNode(id: string) {
@@ -403,6 +483,9 @@ class AudioEngine {
     if (!node) return;
     try { node.output.disconnect(); } catch(e) {}
     if (node.input) try { node.input.disconnect(); } catch(e) {}
+    if (node.extraNodes?.lfo) {
+      try { (node.extraNodes.lfo as OscillatorNode).stop(); } catch(e) {}
+    }
     if ('stop' in node.main) (node.main as any).stop();
     this.nodes.delete(id);
   }

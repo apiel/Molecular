@@ -167,12 +167,14 @@ const App: React.FC = () => {
     return (isMobile || !isSidebarOpen) ? window.innerWidth : window.innerWidth - 320;
   }, [isSidebarOpen]);
 
-  // Exit prevention effect
+  // Robust Exit prevention effect
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (nodes.length > 0) {
         e.preventDefault();
-        e.returnValue = ''; // standard prompt
+        // Modern browsers require setting returnValue to a non-empty string to trigger the prompt.
+        e.returnValue = "Changes you made may not be saved."; 
+        return e.returnValue;
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -213,7 +215,7 @@ const App: React.FC = () => {
       setConnections([{
         id: uuidv4(),
         fromId: defaults[1].id,
-        toId: defaults[0].id
+        toId: id1
       }]);
     }
   }, []);
