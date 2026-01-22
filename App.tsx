@@ -167,6 +167,18 @@ const App: React.FC = () => {
     return (isMobile || !isSidebarOpen) ? window.innerWidth : window.innerWidth - 320;
   }, [isSidebarOpen]);
 
+  // Exit prevention effect
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (nodes.length > 0) {
+        e.preventDefault();
+        e.returnValue = ''; // standard prompt
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [nodes.length]);
+
   useEffect(() => {
     if (nodes.length === 0) {
       const w = getCanvasWidth();
